@@ -1290,7 +1290,7 @@ export default function HeroDetailPage() {
                             </button>
                             <div className="flex items-center gap-1">
                               {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
-                                let pageNum
+                                let pageNum: number
                                 if (totalPages <= 10) {
                                   pageNum = i + 1
                                 } else if (leaderboardPage <= 5) {
