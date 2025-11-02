@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
+import rivalsLogo from '@/components/rivalslogo.png'
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
@@ -26,36 +28,40 @@ export default function Navbar() {
   }, [scrolled])
 
   return (
-    <div className="fixed left-1/2 -translate-x-1/2 top-4 z-50 w-full max-w-3xl px-4 flex justify-center pointer-events-none">
-      <div className="flex items-center gap-2 h-full justify-center pointer-events-auto">
-        <div className="flex justify-center items-center flex-shrink-0 h-full">
-          <div 
-            className={`
-              relative drop-shadow-lg
-              ${scrolled ? 'scale-110' : 'scale-100'}
-            `}
-            style={{
-              width: '36px',
-              height: '36px',
-              transition: 'transform 700ms ease-out',
-              willChange: 'transform'
-            }}
-          >
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      scrolled ? 'bg-black/95 backdrop-blur-sm border-b border-white/5' : 'bg-transparent'
+    }`}>
+      <div className="max-w-7xl mx-auto px-6 lg:px-8">
+        <div className="flex items-center justify-between h-20">
+          <Link href="/" className="flex items-center gap-3 group">
+            <div 
+              className={`
+                relative transition-all duration-300
+                ${scrolled ? 'h-10 w-auto' : 'h-12 w-auto'}
+              `}
+            >
+              <Image
+                src={rivalsLogo}
+                alt="Marvel Rivals Logo"
+                height={scrolled ? 40 : 48}
+                width={scrolled ? 120 : 144}
+                className="h-full w-auto object-contain"
+                priority
+              />
+            </div>
+            <span className="text-lg font-semibold text-gray-300 group-hover:text-white transition-colors bubble-text red-glint" data-text="RivalsDB" style={{ fontSize: '1.125rem' }}>
+              RivalsDB
+            </span>
+          </Link>
+          
+          <div className="hidden md:flex items-center gap-8">
+            <NavLink href="/leaderboards">Leaderboards</NavLink>
+            <NavLink href="/players">Players</NavLink>
+            <NavLink href="/heroes">Heroes</NavLink>
           </div>
         </div>
-        <span 
-          className={`
-            text-lg font-medium overflow-hidden whitespace-nowrap transition-all duration-700 ease-out drop-shadow-lg
-            ${scrolled ? 'max-w-0 opacity-0 ml-0' : 'max-w-[200px] opacity-100 ml-1'}
-          `}
-          style={{
-            transitionProperty: 'max-width, opacity, margin',
-            willChange: 'max-width, opacity, margin-left'
-          }}
-        >
-        </span>
       </div>
-    </div>
+    </nav>
   )
 }
 
@@ -63,7 +69,7 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
   return (
     <Link 
       href={href} 
-      className="text-gray-400 hover:text-[#00ff66] text-sm font-medium transition-colors"
+      className="text-gray-400 hover:text-white text-sm font-medium transition-colors relative after:absolute after:bottom-0 after:left-0 after:w-0 after:h-px after:bg-white after:transition-all hover:after:w-full"
     >
       {children}
     </Link>

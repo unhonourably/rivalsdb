@@ -19,6 +19,75 @@
     transform: translateY(20px);
     animation: slideUp 0.6s ease-out forwards;
   }
+
+  .animate-fade-in-up {
+    opacity: 0;
+    transform: translateY(30px);
+    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .animate-hero-card {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+    animation: heroCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform, opacity;
+  }
+
+  .animate-scale-in {
+    opacity: 0;
+    transform: scale(0.95);
+    animation: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .animate-slide-in-left {
+    opacity: 0;
+    transform: translateX(-20px);
+    animation: slideInLeft 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .bubble-text {
+    font-family: var(--font-fredoka), sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .red-glint {
+    position: relative;
+    display: inline-block;
+    background: linear-gradient(
+      90deg,
+      #ffffff 0%,
+      #ffffff 35%,
+      #dc2626 42%,
+      #ef4444 50%,
+      #dc2626 58%,
+      #ffffff 65%,
+      #ffffff 100%
+    );
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: redGlint 4s ease-in-out infinite;
+    filter: drop-shadow(0 0 8px rgba(220, 38, 38, 0.3));
+  }
+
+  .red-glint::before {
+    content: attr(data-text);
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: -1;
+    background: #ffffff;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: blur(1px);
+    opacity: 0.7;
+    pointer-events: none;
+  }
   
   .animate-modal-in {
     opacity: 0;
@@ -66,7 +135,8 @@
 }
 
 body {
-  @apply bg-background text-white font-manrope;
+  @apply bg-black text-white;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 @keyframes fadeIn {
@@ -82,6 +152,59 @@ body {
   100% { 
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heroCardIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes scaleIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes redGlint {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
   }
 }
 
@@ -174,18 +297,7 @@ body {
 }
 
 .background {
-  @apply fixed top-0 left-0 w-full h-full bg-background z-[-2] opacity-0;
-  animation: fadeIn 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  background: linear-gradient(45deg, #030711, #0F1A3D);
-}
-
-.blur {
-  @apply absolute top-1/2 left-1/2 w-[200vmax] h-[200vmax] z-[-1];
-  background: 
-    radial-gradient(circle at center, rgba(92, 82, 192, 0.12) 0%, rgba(4, 11, 20, 0) 50%),
-    radial-gradient(circle at 30% 50%, rgba(64, 116, 191, 0.08) 0%, rgba(21, 9, 41, 0) 45%);
-  animation: wave 15s ease-in-out infinite alternate,
-             blurIn 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  @apply fixed top-0 left-0 w-full h-full bg-black z-[-2];
 }
 
 .letter {
