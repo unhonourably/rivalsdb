@@ -272,6 +272,7 @@ interface PlayerDetail {
     match_uid: string
     map_id: number
     map_thumbnail: string
+    map_name?: string
     duration: number
     season: number
     winner_side: number
@@ -342,6 +343,7 @@ interface PlayerDetail {
   maps?: Array<{
     map_id: number
     map_thumbnail: string
+    map_name?: string
     matches: number
     wins: number
     kills: number
@@ -360,6 +362,10 @@ export default function PlayerDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'matches' | 'heroes' | 'maps' | 'teammates'>('overview')
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [mapNames, setMapNames] = useState<Record<number, string>>({})
 
   useEffect(() => {
     let mounted = true
@@ -367,34 +373,74 @@ export default function PlayerDetailPage() {
     const fetchPlayerData = async () => {
       if (!playerId) return
 
+      const isNumericId = /^\d+$/.test(playerId)
+      const shouldPreferV1 = isNumericId && playerId.length <= 9
+      const endpointOrder = shouldPreferV1
+        ? [`${API_BASE}/player/${playerId}`, `${API_BASE_V2}/player/${playerId}`]
+        : [`${API_BASE_V2}/player/${playerId}`, `${API_BASE}/player/${playerId}`]
+
+      let lastError: Error | null = null
+      let lastStatus: number | undefined
+
       try {
         setLoading(true)
         setError(null)
+        setUpdateStatus('idle')
+        setUpdateMessage(null)
 
-        const response = await fetch(`${API_BASE_V2}/player/${playerId}`, {
-          headers: { 'x-api-key': API_KEY }
-        })
+        for (const endpoint of endpointOrder) {
+          try {
+            let response = await fetch(endpoint, {
+              headers: { 'x-api-key': API_KEY }
+            })
 
-        if (!response.ok) {
-          if (response.status === 404) {
-            throw new Error('Player not found')
+            if (response.status === 405 || response.status === 404 || response.status === 403) {
+              response = await fetch(`${API_BASE}/player/${playerId}`, {
+                headers: { 'x-api-key': API_KEY }
+              })
+            }
+
+            if (!response.ok) {
+              if (response.status === 404) {
+                throw new Error('Player not found')
+              }
+              if (response.status === 429) {
+                throw new Error('Rate limit exceeded. Please try again in a moment.')
+              }
+              lastStatus = response.status
+              if (response.status === 403) {
+                throw new Error('This player has set their profile to private.')
+              }
+              throw new Error(`Failed to load player data: ${response.status}`)
+            }
+
+            const data = await response.json()
+            console.log('Player detail response:', data)
+
+            if (mounted) {
+              setPlayerData(data)
+            }
+            return
+          } catch (attemptError) {
+            lastError = attemptError instanceof Error
+              ? attemptError
+              : new Error('Failed to load player data')
+            console.warn(`Player fetch failed for ${endpoint}:`, lastError.message)
+            continue
           }
-          if (response.status === 429) {
-            throw new Error('Rate limit exceeded. Please try again in a moment.')
-          }
-          throw new Error(`Failed to load player data: ${response.status}`)
         }
 
-        const data = await response.json()
-        console.log('Player detail response:', data)
-        
         if (mounted) {
-          setPlayerData(data)
+          if (lastStatus === 403) {
+            setError('This player profile is restricted or currently unavailable. Try again later or request an update from the players page.')
+          } else {
+            setError(lastError?.message || 'Failed to load player data')
+          }
         }
-      } catch (err) {
+      } catch (outerError) {
+        const finalError = outerError instanceof Error ? outerError : new Error('Failed to load player data')
         if (mounted) {
-          setError(err instanceof Error ? err.message : 'Failed to load player data')
-          console.error('Error:', err)
+          setError(finalError.message)
         }
       } finally {
         if (mounted) {
@@ -409,6 +455,143 @@ export default function PlayerDetailPage() {
       mounted = false
     }
   }, [playerId])
+
+  useEffect(() => {
+    if (!playerData) return
+
+    const collectedNames: Record<number, string> = {}
+    const idsToFetch = new Set<number>()
+
+    const normalizeName = (value: unknown) => {
+      if (!value) return undefined
+      return toTitleCase(String(value).replace(/_/g, ' '))
+    }
+
+    playerData.maps?.forEach((map) => {
+      if (typeof map.map_id !== 'number') return
+      if (mapNames[map.map_id]) return
+      const direct = normalizeName((map as any)?.map_name || (map as any)?.name)
+      if (direct) {
+        collectedNames[map.map_id] = direct
+      } else {
+        idsToFetch.add(map.map_id)
+      }
+    })
+
+    playerData.match_history?.forEach((match) => {
+      if (typeof match.map_id !== 'number') return
+      if (mapNames[match.map_id] || collectedNames[match.map_id]) return
+      const direct = normalizeName((match as any)?.map_name || (match as any)?.mapName)
+      if (direct) {
+        collectedNames[match.map_id] = direct
+      } else {
+        idsToFetch.add(match.map_id)
+      }
+    })
+
+    if (Object.keys(collectedNames).length > 0) {
+      setMapNames((prev) => ({ ...prev, ...collectedNames }))
+    }
+
+    const ids = Array.from(idsToFetch).filter((id) => mapNames[id] === undefined)
+    if (ids.length === 0) return
+
+    let cancelled = false
+
+    const fetchNames = async () => {
+      const fetched: Record<number, string> = {}
+
+      await Promise.all(
+        ids.map(async (id) => {
+          try {
+            let resp = await fetch(`${API_BASE}/maps/${id}`, {
+              headers: { 'x-api-key': API_KEY }
+            })
+
+            if (!resp.ok) {
+              resp = await fetch(`${API_BASE}/maps/map/${id}`, {
+                headers: { 'x-api-key': API_KEY }
+              })
+            }
+
+            if (!resp.ok) {
+              resp = await fetch(`${API_BASE_V2}/maps/${id}`, {
+                headers: { 'x-api-key': API_KEY }
+              })
+            }
+
+            if (!resp.ok) return
+
+            const data = await resp.json()
+            const name = data?.map_name || data?.name || data?.title || data?.map?.name
+            const normalized = normalizeName(name)
+            if (normalized) {
+              fetched[id] = normalized
+            }
+          } catch (err) {
+            console.warn('Failed to fetch map name', id, err)
+          }
+        })
+      )
+
+      if (!cancelled && Object.keys(fetched).length > 0) {
+        setMapNames((prev) => ({ ...prev, ...fetched }))
+      }
+    }
+
+    fetchNames()
+
+    return () => {
+      cancelled = true
+    }
+  }, [playerData, mapNames])
+
+  const handleRequestUpdate = async () => {
+    if (!playerId) return
+    setShowUpdateModal(false)
+    setUpdateStatus('loading')
+    setUpdateMessage(null)
+
+    const endpoint = `${API_BASE}/player/${playerId}/update`
+
+    const attemptUpdate = async (method: 'POST' | 'GET') => {
+      return fetch(endpoint, {
+        method,
+        headers: { 'x-api-key': API_KEY }
+      })
+    }
+
+    try {
+      let response = await attemptUpdate('POST')
+      if (response.status === 405 || response.status === 404) {
+        response = await attemptUpdate('GET')
+      }
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please try again in a moment.')
+        }
+        const message = await response.text()
+        throw new Error(message || `Failed to request update (${response.status})`)
+      }
+
+      let resultMessage: string | null = null
+      try {
+        const data = await response.json()
+        resultMessage = data?.message || data?.status || null
+      } catch (err) {
+        resultMessage = null
+      }
+
+      setUpdateStatus('success')
+      setUpdateMessage(resultMessage || 'Update request queued successfully.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to request update'
+      setUpdateStatus('error')
+      setUpdateMessage(message)
+      console.error('Failed to request player update:', err)
+    }
+  }
 
   const formatValue = (val: any): string => {
     if (val === null || val === undefined) return '-'
@@ -451,6 +634,58 @@ export default function PlayerDetailPage() {
       .split(' ')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ')
+  }
+
+  const getAssetCandidates = (path?: string): string[] => {
+    if (!path) return []
+    if (path.startsWith('http')) return [path]
+
+    const normalized = path.startsWith('/') ? path : `/${path}`
+    const candidates = new Set<string>()
+
+    candidates.add(`https://marvelrivalsapi.com${normalized}`)
+
+    if (normalized.startsWith('/rivals/')) {
+      const withoutPrefix = normalized.replace('/rivals', '')
+      candidates.add(`https://marvelrivalsapi.com${withoutPrefix}`)
+    } else {
+      candidates.add(`https://marvelrivalsapi.com/rivals${normalized}`)
+    }
+
+    candidates.add(`https://cdn.marvelrivalsapi.com${normalized}`)
+
+    return Array.from(candidates)
+  }
+
+  const getMapDisplayName = (map: { map_id?: number; map_name?: string; mapThumbnail?: string; map_thumbnail?: string }): string => {
+     if (!map) return 'Unknown Map'
+    if (typeof map.map_id === 'number') {
+      const stored = mapNames[map.map_id]
+      if (stored) return stored
+    }
+ 
+     if (map.map_name) {
+       return toTitleCase(map.map_name.replace(/_/g, ' '))
+     }
+ 
+     const altName = (map as any)?.name || (map as any)?.mapName
+     if (altName) {
+       return toTitleCase(String(altName).replace(/_/g, ' '))
+     }
+
+     if (map.map_thumbnail) {
+       const file = map.map_thumbnail.split('/').pop() || ''
+       const base = file.replace(/\.[^.]+$/, '')
+       if (base) {
+         return toTitleCase(base.replace(/_/g, ' '))
+       }
+     }
+
+     if (map.map_id !== undefined) {
+       return `Map ${map.map_id}`
+     }
+
+     return 'Unknown Map'
   }
 
   if (loading) {
@@ -497,15 +732,89 @@ export default function PlayerDetailPage() {
       <main className="flex-1 pt-32 pb-24">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           {/* Back Button */}
-          <Link
-            href="/players"
-            className="inline-flex items-center text-gray-400 hover:text-white mb-8 transition-colors"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to Players
-          </Link>
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+            <Link
+              href="/players"
+              className="inline-flex items-center text-gray-400 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Players
+            </Link>
+            <div className="flex flex-col items-start md:items-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowUpdateModal(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/15 bg-white/10 text-sm font-medium text-white hover:bg-white/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={updateStatus === 'loading'}
+              >
+                {updateStatus === 'loading' ? (
+                  <>
+                    <div className="inline-block animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                    Requesting...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Request Live Update
+                  </>
+                )}
+              </button>
+              {updateMessage && (
+                <span
+                  className={`text-xs ${
+                    updateStatus === 'success'
+                      ? 'text-green-400'
+                      : updateStatus === 'error'
+                      ? 'text-red-400'
+                      : 'text-gray-400'
+                  }`}
+                >
+                  {updateMessage}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {showUpdateModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-6">
+              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => updateStatus !== 'loading' && setShowUpdateModal(false)}></div>
+              <div className="relative w-full max-w-lg rounded-2xl border border-white/10 bg-black/90 p-8 shadow-2xl">
+                <h2 className="text-2xl font-light text-white mb-4">Request Live Update</h2>
+                <p className="text-sm text-gray-300 leading-relaxed mb-6">
+                  You&apos;re about to request fresh stats from the Marvel Rivals service. When you confirm, the player is placed in an update queue that can take up to 30 minutes depending on demand (it usually finishes within 0–5 minutes). Keep in mind you can only request an update once every 30 minutes.
+                </p>
+                <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowUpdateModal(false)}
+                    className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-sm font-medium text-gray-300 hover:bg-white/10 transition-colors"
+                    disabled={updateStatus === 'loading'}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRequestUpdate}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-500/80 hover:bg-blue-500 border border-blue-400 text-sm font-medium text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    disabled={updateStatus === 'loading'}
+                  >
+                    {updateStatus === 'loading' ? (
+                      <>
+                        <div className="inline-block animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                        Requesting...
+                      </>
+                    ) : (
+                      'Confirm Update'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Player Header */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
@@ -929,19 +1238,32 @@ export default function PlayerDetailPage() {
                   <div className="border border-white/10 bg-white/[0.02] rounded-2xl p-8">
                     <h2 className="text-2xl font-light mb-6 text-white">Rank History</h2>
                     <div className="space-y-3">
-                      {playerData.rank_history.slice(0, 10).map((entry, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-4 border border-white/10 rounded-lg bg-black/20">
-                          <div>
-                            <div className="text-white font-medium">
-                              Level {entry.level_progression.from} → Level {entry.level_progression.to}
+                      {playerData.rank_history.slice(0, 10).map((entry, idx) => {
+                        const addScore = entry?.score_progression?.add_score
+                        const hasAddScore = typeof addScore === 'number' && Number.isFinite(addScore)
+                        const addScoreDisplay = hasAddScore
+                          ? `${addScore >= 0 ? '+' : ''}${addScore.toFixed(1)}`
+                          : '-'
+                        const addScoreClass = hasAddScore
+                          ? addScore >= 0
+                            ? 'text-green-400'
+                            : 'text-red-400'
+                          : 'text-gray-400'
+
+                        return (
+                          <div key={idx} className="flex items-center justify-between p-4 border border-white/10 rounded-lg bg-black/20">
+                            <div>
+                              <div className="text-white font-medium">
+                                Level {entry.level_progression.from} → Level {entry.level_progression.to}
+                              </div>
+                              <div className="text-sm text-gray-400">{formatDate(entry.match_time_stamp)}</div>
                             </div>
-                            <div className="text-sm text-gray-400">{formatDate(entry.match_time_stamp)}</div>
+                            <div className={`text-lg font-medium ${addScoreClass}`}>
+                              {addScoreDisplay}
+                            </div>
                           </div>
-                          <div className={`text-lg font-medium ${entry.score_progression.add_score >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {entry.score_progression.add_score >= 0 ? '+' : ''}{entry.score_progression.add_score.toFixed(1)}
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )}
@@ -953,77 +1275,126 @@ export default function PlayerDetailPage() {
                 <h2 className="text-2xl font-light mb-6 text-white">Match History ({playerData.match_history?.length || 0})</h2>
                 {playerData.match_history && playerData.match_history.length > 0 ? (
                   <div className="space-y-4">
-                    {playerData.match_history.map((match, idx) => (
-                      <div key={match.match_uid || idx} className="border border-white/10 bg-white/[0.02] rounded-xl p-6">
-                        <div className="flex items-start gap-6">
-                          {match.map_thumbnail && (
-                            <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
-                              <img
-                                src={match.map_thumbnail.startsWith('http')
-                                  ? match.map_thumbnail
-                                  : `https://marvelrivalsapi.com${match.map_thumbnail}`}
-                                alt={`Map ${match.map_id}`}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement
-                                  target.style.display = 'none'
-                                }}
-                              />
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-4">
-                                {match.player_performance.hero_type && (
-                                  <div className="relative w-12 h-12 rounded overflow-hidden border border-white/10">
-                                    <img
-                                      src={match.player_performance.hero_type.startsWith('http')
-                                        ? match.player_performance.hero_type
-                                        : `https://marvelrivalsapi.com${match.player_performance.hero_type}`}
-                                      alt={toTitleCase(match.player_performance.hero_name)}
-                                      className="w-full h-full object-cover"
-                                      loading="lazy"
-                                      onError={(e) => {
-                                        const target = e.target as HTMLImageElement
-                                        target.style.display = 'none'
-                                      }}
-                                    />
+                    {playerData.match_history.map((match, idx) => {
+                      const scoreChange = match?.player_performance?.score_change
+                      const hasScoreChange = typeof scoreChange === 'number' && Number.isFinite(scoreChange)
+                      const scoreChangeDisplay = hasScoreChange
+                        ? `${scoreChange >= 0 ? '+' : ''}${scoreChange.toFixed(1)}`
+                        : '-'
+                      const scoreChangeClass = hasScoreChange
+                        ? scoreChange >= 0
+                          ? 'text-green-400'
+                          : 'text-red-400'
+                        : 'text-gray-400'
+                      const candidates = getAssetCandidates(match.map_thumbnail)
+                      const href = match.match_uid ? `/matches/${match.match_uid}` : null
+
+                      const card = (
+                        <div className="border border-white/10 bg-white/[0.02] rounded-xl p-6 transition-all group hover:border-white/20 hover:bg-white/[0.04]">
+                          <div className="flex items-start gap-6">
+                            {candidates.length > 0 && (
+                              <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
+                                <img
+                                  src={candidates[0]}
+                                  alt={getMapDisplayName(match)}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  data-attempt="0"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement
+                                    const attempt = Number(target.dataset.attempt || '0') + 1
+                                    const nextSrc = candidates[attempt]
+                                    if (nextSrc) {
+                                      target.dataset.attempt = String(attempt)
+                                      target.src = nextSrc
+                                    } else {
+                                      target.style.display = 'none'
+                                    }
+                                  }}
+                                />
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-4">
+                                  {match.player_performance.hero_type && (() => {
+                                    const heroCandidates = getAssetCandidates(match.player_performance.hero_type)
+                                    if (heroCandidates.length === 0) return null
+                                    return (
+                                      <div className="relative w-12 h-12 rounded overflow-hidden border border-white/10">
+                                        <img
+                                          src={heroCandidates[0]}
+                                          alt={toTitleCase(match.player_performance.hero_name)}
+                                          className="w-full h-full object-cover"
+                                          loading="lazy"
+                                          data-attempt="0"
+                                          onError={(e) => {
+                                            const target = e.target as HTMLImageElement
+                                            const attempt = Number(target.dataset.attempt || '0') + 1
+                                            const nextSrc = heroCandidates[attempt]
+                                            if (nextSrc) {
+                                              target.dataset.attempt = String(attempt)
+                                              target.src = nextSrc
+                                            } else {
+                                              target.style.display = 'none'
+                                            }
+                                          }}
+                                        />
+                                      </div>
+                                    )
+                                  })()}
+                                  <div>
+                                    <div className="text-white font-medium">{toTitleCase(match.player_performance.hero_name)}</div>
+                                    <div className="text-sm text-gray-400">{formatDate(match.match_time_stamp)}</div>
+                                    <div className="text-xs text-gray-500 mt-1">{getMapDisplayName(match)}</div>
                                   </div>
-                                )}
-                                <div>
-                                  <div className="text-white font-medium">{toTitleCase(match.player_performance.hero_name)}</div>
-                                  <div className="text-sm text-gray-400">{formatDate(match.match_time_stamp)}</div>
+                                </div>
+                                <div className={`px-4 py-2 rounded-lg font-medium ${
+                                  match.player_performance.is_win.is_win
+                                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                }`}>
+                                  {match.player_performance.is_win.is_win ? 'Win' : 'Loss'}
                                 </div>
                               </div>
-                              <div className={`px-4 py-2 rounded-lg font-medium ${
-                                match.player_performance.is_win.is_win
-                                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                  : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                              }`}>
-                                {match.player_performance.is_win.is_win ? 'Win' : 'Loss'}
+                              <div className="flex items-center gap-6 text-sm">
+                                <div>
+                                  <span className="text-gray-400">K/D/A: </span>
+                                  <span className="text-white">{match.player_performance.kills}/{match.player_performance.deaths}/{match.player_performance.assists}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-400">Score: </span>
+                                  <span className={scoreChangeClass}>{scoreChangeDisplay}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-400">Duration: </span>
+                                  <span className="text-white">{Math.floor(match.duration / 60)}m {Math.floor(match.duration % 60)}s</span>
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-6 text-sm">
-                              <div>
-                                <span className="text-gray-400">K/D/A: </span>
-                                <span className="text-white">{match.player_performance.kills}/{match.player_performance.deaths}/{match.player_performance.assists}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Score: </span>
-                                <span className={`${match.player_performance.score_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                  {match.player_performance.score_change >= 0 ? '+' : ''}{match.player_performance.score_change.toFixed(1)}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">Duration: </span>
-                                <span className="text-white">{Math.floor(match.duration / 60)}m {Math.floor(match.duration % 60)}s</span>
-                              </div>
+                              {href && (
+                                <div className="mt-4 flex items-center text-xs text-gray-400 group-hover:text-white transition-colors">
+                                  View full match ↗
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+
+                      if (href) {
+                        return (
+                          <Link key={match.match_uid || idx} href={href} className="block" prefetch={true}>
+                            {card}
+                          </Link>
+                        )
+                      }
+
+                      return (
+                        <div key={match.match_uid || idx}>
+                          {card}
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
                   <p className="text-gray-400">No match history available.</p>
@@ -1048,18 +1419,30 @@ export default function PlayerDetailPage() {
                           <div className="flex items-start gap-4">
                             {hero.hero_thumbnail && (
                               <div className="relative w-16 h-16 rounded overflow-hidden border border-white/10 flex-shrink-0">
-                                <img
-                                  src={hero.hero_thumbnail.startsWith('http')
-                                    ? hero.hero_thumbnail
-                                    : `https://marvelrivalsapi.com${hero.hero_thumbnail}`}
-                                  alt={toTitleCase(hero.hero_name)}
-                                  className="w-full h-full object-cover"
-                                  loading="lazy"
-                                  onError={(e) => {
-                                    const target = e.target as HTMLImageElement
-                                    target.style.display = 'none'
-                                  }}
-                                />
+                                {(() => {
+                                  const candidates = getAssetCandidates(hero.hero_thumbnail)
+                                  if (candidates.length === 0) return null
+                                  return (
+                                    <img
+                                      src={candidates[0]}
+                                      alt={toTitleCase(hero.hero_name)}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                      data-attempt="0"
+                                      onError={(e) => {
+                                        const target = e.target as HTMLImageElement
+                                        const attempt = Number(target.dataset.attempt || '0') + 1
+                                        const nextSrc = candidates[attempt]
+                                        if (nextSrc) {
+                                          target.dataset.attempt = String(attempt)
+                                          target.src = nextSrc
+                                        } else {
+                                          target.style.display = 'none'
+                                        }
+                                      }}
+                                    />
+                                  )
+                                })()}
                               </div>
                             )}
                             <div className="flex-1 min-w-0">
@@ -1098,20 +1481,33 @@ export default function PlayerDetailPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {playerData.maps.map((map) => (
                       <div key={map.map_id} className="border border-white/10 bg-white/[0.02] rounded-xl p-6">
+                        <div className="text-lg font-medium text-white mb-3">{getMapDisplayName(map)}</div>
                         {map.map_thumbnail && (
                           <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-white/10 mb-4">
-                            <img
-                              src={map.map_thumbnail.startsWith('http')
-                                ? map.map_thumbnail
-                                : `https://marvelrivalsapi.com${map.map_thumbnail}`}
-                              alt={`Map ${map.map_id}`}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement
-                                target.style.display = 'none'
-                              }}
-                            />
+                            {(() => {
+                              const candidates = getAssetCandidates(map.map_thumbnail)
+                              if (candidates.length === 0) return null
+                              return (
+                                <img
+                                  src={candidates[0]}
+                                  alt={getMapDisplayName(map)}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  data-attempt="0"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement
+                                    const attempt = Number(target.dataset.attempt || '0') + 1
+                                    const nextSrc = candidates[attempt]
+                                    if (nextSrc) {
+                                      target.dataset.attempt = String(attempt)
+                                      target.src = nextSrc
+                                    } else {
+                                      target.style.display = 'none'
+                                    }
+                                  }}
+                                />
+                              )
+                            })()}
                           </div>
                         )}
                         <div className="space-y-2 text-sm">

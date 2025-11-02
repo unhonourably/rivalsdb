@@ -37,27 +37,25 @@ export default function Navbar() {
             <div 
               className={`
                 relative transition-all duration-300
-                ${scrolled ? 'h-10 w-auto' : 'h-12 w-auto'}
+                ${scrolled ? 'h-12 w-auto' : 'h-14 w-auto'}
               `}
             >
               <Image
                 src={rivalsLogo}
                 alt="Marvel Rivals Logo"
-                height={scrolled ? 40 : 48}
-                width={scrolled ? 120 : 144}
+                height={scrolled ? 56 : 64}
+                width={scrolled ? 160 : 192}
                 className="h-full w-auto object-contain"
                 priority
               />
             </div>
-            <span className="text-lg font-semibold text-gray-300 group-hover:text-white transition-colors bubble-text red-glint" data-text="RivalsDB" style={{ fontSize: '1.125rem' }}>
-              RivalsDB
-            </span>
           </Link>
           
           <div className="hidden md:flex items-center gap-8">
             <NavLink href="/leaderboards">Leaderboards</NavLink>
             <NavLink href="/players">Players</NavLink>
             <NavLink href="/heroes">Heroes</NavLink>
+            <NavLink href="/achievements">Achievements</NavLink>
           </div>
         </div>
       </div>

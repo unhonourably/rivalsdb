@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Fredoka } from "next/font/google";
 import "./globals.css";
+import rivalsLogo from '@/components/rivalslogo.png';
 
 const inter = Inter({ 
   subsets: ["latin"],
@@ -18,6 +19,9 @@ const fredoka = Fredoka({
 export const metadata: Metadata = {
   title: "RivalsDB - Marvel Rivals Stats Tracker",
   description: "Track your Marvel Rivals stats, leaderboards, and player profiles. The ultimate companion for Marvel Rivals players.",
+  icons: {
+    icon: rivalsLogo.src,
+  },
 };
 
 export default function RootLayout({

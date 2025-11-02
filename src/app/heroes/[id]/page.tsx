@@ -1245,11 +1245,75 @@ export default function HeroDetailPage() {
                                 const deaths = entry.deaths || 0
                                 const kd = deaths > 0 ? (kills / deaths).toFixed(2) : kills > 0 ? kills.toFixed(2) : '0.00'
                                 const mvps = entry.mvps || 0
+                                const playerUid = entry.player_uid ?? entry.info?.player_uid ?? (entry as any)?.player?.uid
+                                const playerHref = playerUid ? `/players/${playerUid}` : null
+                                const rawIcon = (entry.info?.icon?.player_icon as string | undefined) || undefined
+                                let resolvedIconSrc: string | null = null
+                                if (rawIcon) {
+                                  if (rawIcon.startsWith('http')) {
+                                    resolvedIconSrc = rawIcon
+                                  } else if (rawIcon.startsWith('/rivals/')) {
+                                    resolvedIconSrc = `https://marvelrivalsapi.com${rawIcon}`
+                                  } else if (rawIcon.startsWith('/players/')) {
+                                    resolvedIconSrc = `https://marvelrivalsapi.com/rivals${rawIcon}`
+                                  } else {
+                                    resolvedIconSrc = `https://marvelrivalsapi.com${rawIcon}`
+                                  }
+                                }
                                 
                                 return (
                                   <tr key={entry.player_uid || actualIndex} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                                     <td className="px-6 py-4 text-sm text-gray-400">#{entry.rank || actualIndex + 1}</td>
-                                    <td className="px-6 py-4 text-sm text-white">{playerName}</td>
+                                    <td className="px-6 py-4 text-sm text-white">
+                                      <div className="flex items-center gap-3">
+                                        {resolvedIconSrc ? (
+                                          <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white/10">
+                                            <img
+                                              src={resolvedIconSrc}
+                                              alt={playerName}
+                                              className="w-full h-full object-cover"
+                                              loading="lazy"
+                                              onError={(event) => {
+                                                const target = event.target as HTMLImageElement
+                                                if (rawIcon && rawIcon.startsWith('/rivals/')) {
+                                                  const fallback = `https://marvelrivalsapi.com${rawIcon.replace('/rivals', '')}`
+                                                  if (target.src !== fallback) {
+                                                    target.src = fallback
+                                                    return
+                                                  }
+                                                }
+                                                if (rawIcon && rawIcon.startsWith('/players/')) {
+                                                  const directFallback = `https://marvelrivalsapi.com${rawIcon}`
+                                                  if (target.src !== directFallback) {
+                                                    target.src = directFallback
+                                                    return
+                                                  }
+                                                }
+                                                if (rawIcon && !rawIcon.startsWith('http')) {
+                                                  const fallback = `https://marvelrivalsapi.com${rawIcon}`
+                                                  if (target.src !== fallback) {
+                                                    target.src = fallback
+                                                    return
+                                                  }
+                                                }
+                                                target.style.display = 'none'
+                                              }}
+                                            />
+                                          </div>
+                                        ) : null}
+                                        {playerHref ? (
+                                          <Link
+                                            href={playerHref}
+                                            prefetch={true}
+                                            className="text-white hover:text-red-400 transition-colors"
+                                          >
+                                            {playerName}
+                                          </Link>
+                                        ) : (
+                                          <span>{playerName}</span>
+                                        )}
+                                      </div>
+                                    </td>
                                     <td className="px-6 py-4 text-sm text-gray-400 text-right">{rankScore}</td>
                                     <td className="px-6 py-4 text-sm text-gray-400 text-right">{wins}</td>
                                     <td className="px-6 py-4 text-sm text-gray-400 text-right">{kd}</td>

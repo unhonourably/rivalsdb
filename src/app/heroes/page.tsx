@@ -350,9 +350,9 @@ export default function HeroesPage() {
               <div className="border border-white/10 rounded-xl p-6 bg-black/30">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-8">
                   {filteredHeroes.map((hero, index) => {
-                    const imageUrl = hero.imageUrl 
-                      ? (hero.imageUrl.startsWith('http') 
-                          ? hero.imageUrl 
+                    const imageUrl = hero.imageUrl
+                      ? (hero.imageUrl.startsWith('http')
+                          ? hero.imageUrl
                           : `https://marvelrivalsapi.com${hero.imageUrl}`)
                       : null
 
@@ -360,20 +360,20 @@ export default function HeroesPage() {
                       <Link
                         key={hero.id}
                         href={`/heroes/${hero.id}`}
-                        className="group relative block animate-hero-card"
-                        style={{ 
+                        className="group relative block animate-hero-card focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                        style={{
                           animationDelay: `${index * 0.05}s`,
                           animationFillMode: 'both'
                         }}
                         prefetch={true}
                       >
-                        {imageUrl ? (
-                          <div className="relative w-full aspect-square min-h-[280px]">
+                        <div className="relative w-full aspect-square min-h-[280px] overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] transition-all duration-300 group-hover:border-white/30 group-hover:bg-white/[0.08]">
+                          {imageUrl ? (
                             <Image
                               src={imageUrl}
                               alt={toTitleCase(hero.name)}
                               fill
-                              className="object-contain group-hover:scale-110 transition-transform duration-200"
+                              className="object-contain transition-transform duration-500 group-hover:scale-105"
                               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 33vw, 25vw"
                               loading="lazy"
                               unoptimized
@@ -383,17 +383,39 @@ export default function HeroesPage() {
                                 target.style.display = 'none'
                               }}
                             />
-                          </div>
-                        ) : (
-                          <div className="relative w-full aspect-square border border-white/10 bg-white/[0.02] rounded-xl flex flex-col items-center justify-center p-6">
-                            <div className="text-6xl mb-3">🦸</div>
-                            <h3 className="text-lg font-medium text-white mb-1">{toTitleCase(hero.name)}</h3>
-                            <p className="text-sm text-gray-400 mb-3">{hero.alias ? toTitleCase(hero.alias) : ''}</p>
-                            <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getRoleColor(hero.role)}`}>
-                              {hero.role}
+                          ) : (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center gap-3 p-6 text-white/80">
+                              <div className="text-6xl">🦸</div>
+                              <h3 className="text-lg font-medium text-white">{toTitleCase(hero.name)}</h3>
+                              {hero.alias && (
+                                <p className="text-sm text-gray-400">{toTitleCase(hero.alias)}</p>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/85 via-black/25 to-transparent opacity-80 transition-opacity duration-300 group-hover:opacity-95"></div>
+
+                          <div className="absolute inset-x-0 bottom-0 p-6 pt-12">
+                            <div className="flex items-end justify-between gap-4">
+                              <div>
+                                {hero.alias && (
+                                  <p className="text-xs uppercase tracking-[0.35em] text-gray-400 mb-2">
+                                    {toTitleCase(hero.alias)}
+                                  </p>
+                                )}
+                                <h3 className="text-xl font-semibold text-white">
+                                  {toTitleCase(hero.name)}
+                                </h3>
+                                {hero.type && (
+                                  <p className="text-sm text-gray-300/70 mt-1">{toTitleCase(hero.type)}</p>
+                                )}
+                              </div>
+                              <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getRoleColor(hero.role)}`}>
+                                {toTitleCase(hero.role)}
+                              </div>
                             </div>
                           </div>
-                        )}
+                        </div>
                       </Link>
                     )
                   })}
