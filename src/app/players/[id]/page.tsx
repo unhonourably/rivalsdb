@@ -513,7 +513,7 @@ export default function PlayerDetailPage() {
 
         if (mounted) {
           if (lastStatus === 403) {
-            setError('This player profile is restricted or currently unavailable. Try again later or request an update from the players page.')
+            setError('This player has set their profile to private.')
           } else {
             setError(lastError?.message || 'Failed to load player data')
           }
@@ -679,7 +679,14 @@ export default function PlayerDetailPage() {
     if (typeof val === 'string') return val
     if (typeof val === 'number') {
       if (val >= 0 && val <= 1 && val !== Math.floor(val)) {
-        return `${(val * 100).toFixed(1)}%`
+        const percentage = val * 100
+        if (percentage < 0.1) {
+          return `${percentage.toFixed(2)}%`
+        }
+        return `${percentage.toFixed(1)}%`
+      }
+      if (Math.abs(val) >= 1000000000) {
+        return `${(val / 1000000000).toFixed(2)}B`
       }
       if (Math.abs(val) >= 1000000) {
         return `${(val / 1000000).toFixed(2)}M`
@@ -688,11 +695,39 @@ export default function PlayerDetailPage() {
         return val.toLocaleString(undefined, { maximumFractionDigits: 0 })
       }
       if (val !== Math.floor(val)) {
+        if (Math.abs(val) < 0.01) {
+          return val.toFixed(4)
+        }
         return val.toFixed(2)
       }
       return val.toString()
     }
     return String(val)
+  }
+
+  const hasStatValue = (val: any): boolean => {
+    if (val === null || val === undefined) return false
+    if (typeof val === 'object') {
+      return Object.values(val).some((entry) => entry !== null && entry !== undefined)
+    }
+    return true
+  }
+
+  const extractStatValue = (stat: any, preferredKeys: string[] = []): any => {
+    if (stat === null || stat === undefined) return null
+    if (typeof stat !== 'object') return stat
+    for (const key of preferredKeys) {
+      if (stat[key] !== null && stat[key] !== undefined) return stat[key]
+    }
+    const values = Object.values(stat).filter((value) => value !== null && value !== undefined)
+    return values.length > 0 ? values[0] : null
+  }
+
+  const formatRatio = (value: any): string => {
+    if (value === null || value === undefined) return '-'
+    const numeric = typeof value === 'number' ? value : Number(value)
+    if (!Number.isFinite(numeric)) return '-'
+    return numeric.toFixed(2)
   }
 
   const formatTime = (seconds: number): string => {
@@ -985,63 +1020,68 @@ export default function PlayerDetailPage() {
             {overallStats && (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
-                  <div className="text-3xl font-light mb-2 text-white">{overallStats.total_matches}</div>
+                  <div className="text-3xl font-light mb-2 text-white">
+                    {formatValue(overallStats.total_matches ?? '-')}
+                  </div>
                   <div className="text-xs text-gray-400 uppercase tracking-wider">Matches</div>
                 </div>
                 <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                   <div className="text-3xl font-light mb-2 text-white">
-                    {typeof overallStats.total_wins === 'object' 
-                      ? overallStats.total_wins.wins || '-'
-                      : overallStats.total_wins}
+                    {(() => {
+                      const value = extractStatValue(overallStats.total_wins, ['wins', 'total'])
+                      return value === null ? '-' : formatValue(value)
+                    })()}
                   </div>
                   <div className="text-xs text-gray-400 uppercase tracking-wider">Wins</div>
                 </div>
                 <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                   <div className="text-3xl font-light mb-2 text-white">
                     {(() => {
-                      const matches = overallStats.total_matches || 0
-                      const wins = typeof overallStats.total_wins === 'object' 
-                        ? overallStats.total_wins.wins || 0
-                        : overallStats.total_wins || 0
-                      return matches > 0 ? `${((wins / matches) * 100).toFixed(1)}%` : '-'
+                      const matchesValue = extractStatValue(overallStats.total_matches)
+                      const winsValue = extractStatValue(overallStats.total_wins, ['wins', 'total'])
+                      const matches = Number(matchesValue)
+                      const wins = Number(winsValue)
+                      if (!Number.isFinite(matches) || matches <= 0) return '-'
+                      if (!Number.isFinite(wins)) return '-'
+                      return `${((wins / matches) * 100).toFixed(1)}%`
                     })()}
                   </div>
                   <div className="text-xs text-gray-400 uppercase tracking-wider">Win Rate</div>
                 </div>
-                {overallStats.total_kills && (
+                {hasStatValue(overallStats.total_kills) && (
                   <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                     <div className="text-3xl font-light mb-2 text-white">
-                      {typeof overallStats.total_kills === 'object' 
-                        ? overallStats.total_kills.kills || '-'
-                        : overallStats.total_kills}
+                      {(() => {
+                        const value = extractStatValue(overallStats.total_kills, ['kills', 'value', 'total'])
+                        return value === null ? '-' : formatValue(value)
+                      })()}
                     </div>
                     <div className="text-xs text-gray-400 uppercase tracking-wider">Kills</div>
                   </div>
                 )}
-                {overallStats.total_deaths && (
+                {hasStatValue(overallStats.total_deaths) && (
                   <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                     <div className="text-3xl font-light mb-2 text-white">
-                      {typeof overallStats.total_deaths === 'object' 
-                        ? overallStats.total_deaths.deaths || '-'
-                        : overallStats.total_deaths}
+                      {(() => {
+                        const value = extractStatValue(overallStats.total_deaths, ['deaths', 'value', 'total'])
+                        return value === null ? '-' : formatValue(value)
+                      })()}
                     </div>
                     <div className="text-xs text-gray-400 uppercase tracking-wider">Deaths</div>
                   </div>
                 )}
-                {overallStats.overall_kd && (
+                {hasStatValue(overallStats.overall_kd) && (
                   <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
-                    <div className="text-3xl font-light mb-2 text-white">{overallStats.overall_kd.toFixed(2)}</div>
+                    <div className="text-3xl font-light mb-2 text-white">
+                      {formatRatio(extractStatValue(overallStats.overall_kd, ['kd', 'value', 'ratio']))}
+                    </div>
                     <div className="text-xs text-gray-400 uppercase tracking-wider">K/D</div>
                   </div>
                 )}
-                {overallStats.overall_kda && (
+                {hasStatValue(overallStats.overall_kda) && (
                   <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                     <div className="text-3xl font-light mb-2 text-white">
-                      {typeof overallStats.overall_kda === 'object' 
-                        ? (overallStats.overall_kda.kda !== undefined ? overallStats.overall_kda.kda.toFixed(2) : '-')
-                        : typeof overallStats.overall_kda === 'number'
-                        ? overallStats.overall_kda.toFixed(2)
-                        : '-'}
+                      {formatRatio(extractStatValue(overallStats.overall_kda, ['kda', 'value', 'kda_raw']))}
                     </div>
                     <div className="text-xs text-gray-400 uppercase tracking-wider">KDA</div>
                   </div>
@@ -1118,7 +1158,7 @@ export default function PlayerDetailPage() {
                       {overallStats.total_play_time && (
                         <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                           <div className="text-2xl font-light mb-2 text-white">
-                            {overallStats.total_play_time.playtime || '-'}
+                            {overallStats.total_play_time.playtime ?? '-'}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider">Play Time</div>
                         </div>
@@ -1126,7 +1166,7 @@ export default function PlayerDetailPage() {
                       {overallStats.total_damage && (
                         <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                           <div className="text-2xl font-light mb-2 text-white">
-                            {overallStats.total_damage.damage || '-'}
+                            {overallStats.total_damage.damage ?? '-'}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider">Total Damage</div>
                         </div>
@@ -1134,7 +1174,7 @@ export default function PlayerDetailPage() {
                       {overallStats.total_healing && (
                         <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                           <div className="text-2xl font-light mb-2 text-white">
-                            {overallStats.total_healing.healing || '-'}
+                            {overallStats.total_healing.healing ?? '-'}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider">Total Healing</div>
                         </div>
@@ -1142,7 +1182,7 @@ export default function PlayerDetailPage() {
                       {overallStats.total_damage_taken && (
                         <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                           <div className="text-2xl font-light mb-2 text-white">
-                            {overallStats.total_damage_taken.damage_taken || '-'}
+                            {overallStats.total_damage_taken.damage_taken ?? '-'}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider">Damage Taken</div>
                         </div>
@@ -1151,13 +1191,13 @@ export default function PlayerDetailPage() {
                         <>
                           <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                             <div className="text-2xl font-light mb-2 text-white">
-                              {formatValue(overallStats.per_minute.total_damage_per_minute || 0)}/min
+                              {formatValue(overallStats.per_minute.total_damage_per_minute ?? 0)}/min
                             </div>
                             <div className="text-xs text-gray-400 uppercase tracking-wider">Dmg/Min</div>
                           </div>
                           <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                             <div className="text-2xl font-light mb-2 text-white">
-                              {formatValue(overallStats.per_minute.total_healing_per_minute || 0)}/min
+                              {formatValue(overallStats.per_minute.total_healing_per_minute ?? 0)}/min
                             </div>
                             <div className="text-xs text-gray-400 uppercase tracking-wider">Heal/Min</div>
                           </div>
@@ -1166,7 +1206,7 @@ export default function PlayerDetailPage() {
                       {overallStats.total_mvps && (
                         <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                           <div className="text-3xl font-light mb-2 text-white">
-                            {overallStats.total_mvps.mvps || 0}
+                            {overallStats.total_mvps.mvps ?? 0}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider">MVPs</div>
                         </div>
@@ -1174,7 +1214,7 @@ export default function PlayerDetailPage() {
                       {overallStats.total_svps && (
                         <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                           <div className="text-3xl font-light mb-2 text-white">
-                            {overallStats.total_svps.svps || 0}
+                            {overallStats.total_svps.svps ?? 0}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider">SVPs</div>
                         </div>
@@ -1235,23 +1275,23 @@ export default function PlayerDetailPage() {
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
                               <span className="text-gray-400">Matches:</span>
-                              <span className="text-white">{overallStats.roles_played.duelist.matches_played?.toFixed(1) || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.duelist.matches_played?.toFixed(1) ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Win Rate:</span>
-                              <span className="text-white">{overallStats.roles_played.duelist.win_percentage?.win_rate || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.duelist.win_percentage?.win_rate ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">K/D:</span>
-                              <span className="text-white">{overallStats.roles_played.duelist.kd_ratio?.kd || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.duelist.kd_ratio?.kd ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Kills:</span>
-                              <span className="text-white">{overallStats.roles_played.duelist.kills || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.duelist.kills ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Play Time:</span>
-                              <span className="text-white">{overallStats.roles_played.duelist.total_time_played?.playtime || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.duelist.total_time_played?.playtime ?? '-'}</span>
                             </div>
                           </div>
                         </div>
@@ -1262,23 +1302,23 @@ export default function PlayerDetailPage() {
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
                               <span className="text-gray-400">Matches:</span>
-                              <span className="text-white">{overallStats.roles_played.strategist.matches_played?.toFixed(1) || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.strategist.matches_played?.toFixed(1) ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Win Rate:</span>
-                              <span className="text-white">{overallStats.roles_played.strategist.win_percentage?.win_rate || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.strategist.win_percentage?.win_rate ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">K/D:</span>
-                              <span className="text-white">{overallStats.roles_played.strategist.kd_ratio?.kd || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.strategist.kd_ratio?.kd ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Kills:</span>
-                              <span className="text-white">{overallStats.roles_played.strategist.kills || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.strategist.kills ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Play Time:</span>
-                              <span className="text-white">{overallStats.roles_played.strategist.total_time_played?.playtime || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.strategist.total_time_played?.playtime ?? '-'}</span>
                             </div>
                           </div>
                         </div>
@@ -1289,23 +1329,23 @@ export default function PlayerDetailPage() {
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
                               <span className="text-gray-400">Matches:</span>
-                              <span className="text-white">{overallStats.roles_played.vanguard.matches_played?.toFixed(1) || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.vanguard.matches_played?.toFixed(1) ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Win Rate:</span>
-                              <span className="text-white">{overallStats.roles_played.vanguard.win_percentage?.win_rate || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.vanguard.win_percentage?.win_rate ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">K/D:</span>
-                              <span className="text-white">{overallStats.roles_played.vanguard.kd_ratio?.kd || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.vanguard.kd_ratio?.kd ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Kills:</span>
-                              <span className="text-white">{overallStats.roles_played.vanguard.kills || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.vanguard.kills ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Play Time:</span>
-                              <span className="text-white">{overallStats.roles_played.vanguard.total_time_played?.playtime || '-'}</span>
+                              <span className="text-white">{overallStats.roles_played.vanguard.total_time_played?.playtime ?? '-'}</span>
                             </div>
                           </div>
                         </div>
