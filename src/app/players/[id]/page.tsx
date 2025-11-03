@@ -353,6 +353,86 @@ interface PlayerDetail {
   }>
 }
 
+const resolveObject = (value: unknown): Record<string, any> | undefined => {
+  if (!value) return undefined
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const resolved = resolveObject(item)
+      if (resolved) return resolved
+    }
+    return undefined
+  }
+  if (typeof value === 'object') {
+    return value as Record<string, any>
+  }
+  return undefined
+}
+
+const mergePlayerPayload = (payload: any): PlayerDetail => {
+  const base = resolveObject(payload) ?? ({} as Record<string, any>)
+  const nested = resolveObject(base.data) ?? resolveObject((payload as any)?.data)
+  const normalized: Record<string, any> = {}
+  if (nested) {
+    Object.assign(normalized, nested)
+  }
+  Object.assign(normalized, base)
+  const candidatePlayer =
+    resolveObject(normalized.player) ??
+    resolveObject(base.player) ??
+    resolveObject(nested?.player) ??
+    resolveObject((payload as any)?.player) ??
+    (typeof base.uid === 'number' && (base.rank || base.level || base.icon || base.info) ? base : undefined) ??
+    (typeof nested?.uid === 'number' && (nested?.rank || nested?.level || nested?.icon || nested?.info) ? (nested as Record<string, any>) : undefined)
+  if (candidatePlayer) {
+    normalized.player = { ...candidatePlayer }
+  }
+  const overallNode =
+    resolveObject(normalized.overall_stats) ??
+    resolveObject(base.overall_stats) ??
+    resolveObject(nested?.overall_stats) ??
+    resolveObject((payload as any)?.overall_stats) ??
+    resolveObject(candidatePlayer?.overall_stats) ??
+    resolveObject(candidatePlayer?.overall) ??
+    resolveObject(base.overall) ??
+    resolveObject(nested?.overall)
+  if (overallNode) {
+    normalized.overall_stats = overallNode
+  }
+  const arrayKeys = ['match_history', 'rank_history', 'hero_matchups', 'heroes_ranked', 'heroes_unranked', 'team_mates', 'maps']
+  arrayKeys.forEach((key) => {
+    if (Array.isArray(normalized[key])) return
+    if (Array.isArray(base[key])) {
+      normalized[key] = base[key]
+      return
+    }
+    if (Array.isArray(nested?.[key])) {
+      normalized[key] = nested[key]
+      return
+    }
+    if (Array.isArray(candidatePlayer?.[key])) {
+      normalized[key] = candidatePlayer[key]
+      return
+    }
+    const payloadValue = (payload as any)?.[key]
+    if (Array.isArray(payloadValue)) {
+      normalized[key] = payloadValue
+    }
+  })
+  if (normalized.uid === undefined) {
+    normalized.uid = base.uid ?? nested?.uid ?? candidatePlayer?.uid ?? (payload as any)?.uid
+  }
+  if (!normalized.name) {
+    normalized.name = base.name ?? nested?.name ?? candidatePlayer?.name ?? (payload as any)?.name
+  }
+  if (normalized.isPrivate === undefined) {
+    normalized.isPrivate = base.isPrivate ?? nested?.isPrivate ?? candidatePlayer?.isPrivate ?? (payload as any)?.isPrivate
+  }
+  if (!normalized.updates) {
+    normalized.updates = base.updates ?? nested?.updates ?? candidatePlayer?.updates ?? (payload as any)?.updates
+  }
+  return normalized as PlayerDetail
+}
+
 export default function PlayerDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -416,9 +496,10 @@ export default function PlayerDetailPage() {
 
             const data = await response.json()
             console.log('Player detail response:', data)
+            const normalized = mergePlayerPayload(data)
 
             if (mounted) {
-              setPlayerData(data)
+              setPlayerData(normalized)
             }
             return
           } catch (attemptError) {
