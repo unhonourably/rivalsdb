@@ -4,34 +4,13 @@ import { useEffect, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 
-const API_KEY = '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
 const API_DOMAIN = 'https://marvelrivalsapi.com'
-const API_BASE = `${API_DOMAIN}/api/v1`
-
-interface GameVersionsResponse {
-  total_versions?: number
-  formatted_versions?: Array<{
-    version?: string | number
-    release?: string
-    patchNotesUrl?: string
-  }>
-}
 
 interface GameVersionEntry {
   id: string
   versionLabel: string
   releaseLabel?: string
   patchNotesUrl?: string
-}
-
-const formatDateLabel = (value?: string | number): string | undefined => {
-  if (!value) return undefined
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) {
-    if (typeof value === 'string' && value.trim()) return value
-    return undefined
-  }
-  return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 export default function GameVersionsPage() {
@@ -43,24 +22,21 @@ export default function GameVersionsPage() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`${API_BASE}/game-versions?page=1&limit=100&current=1`, {
-        headers: { 'x-api-key': API_KEY },
+      const response = await fetch('/api/game-versions', {
+        cache: 'no-store',
         signal
       })
       if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please try again shortly.')
-        }
         throw new Error(`Failed to load game versions (${response.status})`)
       }
-      const data: GameVersionsResponse = await response.json()
-      const versions = Array.isArray(data?.formatted_versions) ? data.formatted_versions : []
+      const data = await response.json()
+      const versions = Array.isArray(data?.gameVersions) ? data.gameVersions : []
       setEntries(
-        versions.map((entry, index) => ({
-          id: `game-version-${entry.version ?? index}`,
-          versionLabel: entry.version ? String(entry.version) : 'Version',
-          releaseLabel: formatDateLabel(entry.release),
-          patchNotesUrl: entry.patchNotesUrl ? `${API_DOMAIN}${entry.patchNotesUrl.startsWith('/') ? entry.patchNotesUrl : `/${entry.patchNotesUrl}`}` : undefined
+        versions.map((entry: any) => ({
+          id: entry.id ?? `version-${entry.version_label}`,
+          versionLabel: entry.version_label ?? 'Version',
+          releaseLabel: entry.release_label,
+          patchNotesUrl: undefined
         }))
       )
     } catch (err) {
@@ -127,19 +103,6 @@ export default function GameVersionsPage() {
                     <h2 className="text-2xl font-semibold text-white mt-2">{entry.versionLabel}</h2>
                     {entry.releaseLabel && <p className="text-sm text-gray-400 mt-1">Released {entry.releaseLabel}</p>}
                   </div>
-                  {entry.patchNotesUrl && (
-                    <a
-                      href={entry.patchNotesUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white hover:bg-white/10 transition-colors"
-                    >
-                      View Patch Notes
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
-                      </svg>
-                    </a>
-                  )}
                 </div>
               ))}
 

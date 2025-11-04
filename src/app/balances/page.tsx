@@ -4,22 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 
-const API_KEY = '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
 const API_DOMAIN = 'https://marvelrivalsapi.com'
-const API_BASE = `${API_DOMAIN}/api/v1`
-
-interface BalancesResponse {
-  total_patches?: number
-  formatted_patches?: Array<{
-    patchTitle?: string
-    patchDate?: string
-    patchType?: string
-    previewText?: string
-    imagePath?: string
-    fullContent?: string
-    htmlContent?: string
-  }>
-}
 
 interface BalanceEntry {
   id: string
@@ -48,15 +33,6 @@ const getAssetCandidates = (path?: string): string[] => {
   return Array.from(candidates)
 }
 
-const formatDateLabel = (value?: string | number): string | undefined => {
-  if (!value) return undefined
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    if (typeof value === 'string' && value.trim()) return value
-    return undefined
-  }
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-}
 
 const SmartImage: React.FC<{ paths: string[]; alt: string; className?: string }> = ({ paths, alt, className }) => {
   const [attempt, setAttempt] = useState(0)
@@ -88,27 +64,24 @@ export default function BalancesPage() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`${API_BASE}/balances?page=1&limit=50`, {
-        headers: { 'x-api-key': API_KEY },
+      const response = await fetch('/api/balances', {
+        cache: 'no-store',
         signal
       })
       if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please try again shortly.')
-        }
         throw new Error(`Failed to load balances (${response.status})`)
       }
-      const data: BalancesResponse = await response.json()
-      const patches = Array.isArray(data?.formatted_patches) ? data.formatted_patches : []
+      const data = await response.json()
+      const patches = Array.isArray(data?.balances) ? data.balances : []
       setEntries(
-        patches.map((patch, index) => ({
-          id: `balance-${patch.patchTitle ?? index}`,
-          title: patch.patchTitle ?? patch.patchType ?? 'Balance Update',
-          dateLabel: formatDateLabel(patch.patchDate),
-          preview: patch.previewText,
-          content: patch.fullContent,
-          html: patch.htmlContent,
-          imagePaths: getAssetCandidates(patch.imagePath)
+        patches.map((patch: any) => ({
+          id: patch.id ?? `balance-${patch.title}`,
+          title: patch.title ?? 'Balance Update',
+          dateLabel: patch.date_label,
+          preview: patch.preview,
+          content: patch.content,
+          html: patch.html,
+          imagePaths: getAssetCandidates(patch.image_path)
         }))
       )
     } catch (err) {
@@ -133,6 +106,16 @@ export default function BalancesPage() {
     fetchData()
   }
 
+  useEffect(() => {
+    if (selectedEntry) {
+      const original = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.body.style.overflow = original
+      }
+    }
+  }, [selectedEntry])
+
   const modalContent = useMemo(() => {
     if (!selectedEntry) return null
     return (
@@ -145,7 +128,7 @@ export default function BalancesPage() {
                 <SmartImage paths={selectedEntry.imagePaths} alt={selectedEntry.title} className="w-full h-full object-cover" />
               </div>
             )}
-            <div className="flex-1 p-6 overflow-y-auto">
+            <div className="flex-1 p-6 overflow-y-auto max-h-[85vh]">
               <div className="flex items-center justify-between gap-4 mb-4">
                 <div>
                   <div className="text-xs uppercase tracking-[0.3em] text-gray-400">Balances</div>
@@ -158,11 +141,11 @@ export default function BalancesPage() {
                   </svg>
                 </button>
               </div>
-              {selectedEntry.preview && <p className="text-gray-300 mb-4">{selectedEntry.preview}</p>}
+              {selectedEntry.preview && <p className="text-gray-300 mb-4 break-words">{selectedEntry.preview}</p>}
               {selectedEntry.html ? (
-                <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: selectedEntry.html }} />
+                <div className="prose prose-invert max-w-none break-words" dangerouslySetInnerHTML={{ __html: selectedEntry.html }} />
               ) : (
-                <p className="text-gray-200 whitespace-pre-line">{selectedEntry.content ?? 'No additional details available.'}</p>
+                <p className="text-gray-200 whitespace-pre-line break-words">{selectedEntry.content ?? 'No additional details available.'}</p>
               )}
             </div>
           </div>

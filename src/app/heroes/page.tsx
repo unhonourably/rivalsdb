@@ -48,36 +48,22 @@ export default function HeroesPage() {
     const fetchHeroes = async () => {
       try {
         setLoading(true)
-        const response = await fetch('https://marvelrivalsapi.com/api/v1/heroes', {
-          headers: {
-            'x-api-key': '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
-          }
+        const response = await fetch('/api/heroes', {
+          cache: 'no-store'
         })
 
         if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(`API Error: ${response.status} - ${errorText}`)
+          throw new Error(`Failed to load heroes (${response.status})`)
         }
 
         const data = await response.json()
-        console.log('API Response:', data) // Debug log
-        
-        // Handle different possible response formats
-        if (data.heroes && Array.isArray(data.heroes)) {
-          setHeroes(data.heroes)
-        } else if (Array.isArray(data)) {
-          // If the API directly returns an array
-          setHeroes(data)
-        } else if (data.data && Array.isArray(data.data)) {
-          // Some APIs wrap in a data property
-          setHeroes(data.data)
-        } else {
-          console.error('Unexpected response format:', data)
-          throw new Error(`Invalid response format. Received: ${JSON.stringify(data).substring(0, 200)}`)
-        }
+        const heroList = Array.isArray(data?.heroes) ? data.heroes : []
+        setHeroes(heroList.map((hero: any) => ({
+          ...hero,
+          imageUrl: hero.image_url ?? hero.imageUrl
+        })))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch heroes')
-        console.error('Error fetching heroes:', err)
       } finally {
         setLoading(false)
       }
@@ -119,73 +105,17 @@ export default function HeroesPage() {
     return queryWords.every(word => word.length > 2 && allHeroText.includes(word))
   }
 
-  // Search API call with client-side fallback
   useEffect(() => {
-    const searchHeroes = async () => {
+    const searchHeroes = () => {
       if (!searchQuery.trim()) {
         setSearchedHeroes([])
         return
       }
 
-      try {
-        setIsSearching(true)
-        
-        // Try API first
-        const response = await fetch(
-          `https://marvelrivalsapi.com/api/v1/heroes/hero/${encodeURIComponent(searchQuery)}`,
-          {
-            headers: {
-              'x-api-key': '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
-            }
-          }
-        )
-
-        let results: Hero[] = []
-        
-        if (response.ok) {
-          const data = await response.json()
-          console.log('Search API Response:', data)
-          
-          // Handle different response formats
-          if (Array.isArray(data)) {
-            results = data
-          } else if (data.hero && Array.isArray(data.hero)) {
-            results = data.hero
-          } else if (data.heroes && Array.isArray(data.heroes)) {
-            results = data.heroes
-          } else if (data.hero && !Array.isArray(data.hero)) {
-            results = [data.hero]
-          } else if (data.data) {
-            if (Array.isArray(data.data)) {
-              results = data.data
-            } else {
-              results = [data.data]
-            }
-          } else if (data.id || data.name) {
-            results = [data]
-          }
-        }
-        
-        // If API returned no results, do client-side fuzzy search
-        if (results.length === 0 && heroes.length > 0) {
-          console.log('API returned no results, doing client-side fuzzy search')
-          results = heroes.filter(hero => fuzzyMatch(hero, searchQuery))
-        }
-        
-        console.log('Final search results:', results.length, results)
-        setSearchedHeroes(results)
-      } catch (err) {
-        console.error('Error searching heroes:', err)
-        // On error, fall back to client-side search
-        if (heroes.length > 0) {
-          const results = heroes.filter(hero => fuzzyMatch(hero, searchQuery))
-          setSearchedHeroes(results)
-        } else {
-          setSearchedHeroes([])
-        }
-      } finally {
-        setIsSearching(false)
-      }
+      setIsSearching(true)
+      const results = heroes.filter(hero => fuzzyMatch(hero, searchQuery))
+      setSearchedHeroes(results)
+      setIsSearching(false)
     }
 
     const debounceTimer = setTimeout(() => {

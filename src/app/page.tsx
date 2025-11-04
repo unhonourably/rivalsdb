@@ -7,7 +7,6 @@ import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import rivalsLogo from '@/components/rivalslogo.png'
 
-const API_KEY = '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
 const API_BASE = 'https://marvelrivalsapi.com/api/v1'
 const API_BASE_V2 = 'https://marvelrivalsapi.com/api/v2'
 
@@ -15,9 +14,18 @@ interface HeroShowcase {
   id: string
   name: string
   role?: string
-  winRate: number
-  matches: number
-  wins: number
+  image_url?: string
+  displayValue: string | number
+  score: number
+  stats?: {
+    wins?: number
+    matches?: number
+    win_rate?: number
+    total_hero_damage?: string
+    total_damage_taken?: string
+    total_hero_heal?: string
+    play_time?: string
+  }
   iconPaths: string[]
 }
 
@@ -31,15 +39,21 @@ interface HeroCandidate {
 interface PlayerShowcase {
   uid: string
   name: string
-  rank?: string
-  rankColor?: string
-  rankIconPaths?: string[]
-  score?: number
-  winRate?: number
-  matches?: number
-  wins?: number
+  rank_label?: string
+  rank_color?: string
+  player_icon?: string
+  displayValue: string | number
+  score: number
+  win_count?: number
+  battle_count?: number
+  win_rate?: string
+  level?: number
+  max_level?: number
+  rank_score?: number
+  max_rank_score?: number
   iconPaths: string[]
 }
+
 
 const toTitleCase = (str: string | undefined | null): string => {
   if (!str) return ''
@@ -105,13 +119,31 @@ const formatNumber = (value?: number): string => {
 }
 
 export default function Home() {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isFocused, setIsFocused] = useState(false)
   const [topHeroes, setTopHeroes] = useState<HeroShowcase[]>([])
   const [topPlayers, setTopPlayers] = useState<PlayerShowcase[]>([])
-  const [showcaseView, setShowcaseView] = useState<'heroes' | 'players'>('heroes')
-  const [showcaseLoading, setShowcaseLoading] = useState(true)
+  const [heroLoading, setHeroLoading] = useState(true)
+  const [playerLoading, setPlayerLoading] = useState(true)
   const [showcaseError, setShowcaseError] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<'wins' | 'winrate' | 'damage' | 'damage_taken' | 'healing' | 'playtime'>('wins')
+  const [selectedPlayerCategory, setSelectedPlayerCategory] = useState<'score' | 'winrate' | 'win_count' | 'max_level' | 'battle_count' | 'max_rank_score'>('score')
+  
+  const categoryLabels: Record<string, string> = {
+    wins: 'Overall Wins',
+    winrate: 'Overall Win Rate',
+    damage: 'Total Damage',
+    damage_taken: 'Total Damage Taken',
+    healing: 'Total Healing',
+    playtime: 'Playtime'
+  }
+
+  const playerCategoryLabels: Record<string, string> = {
+    score: 'Overall Score',
+    winrate: 'Win Rate',
+    win_count: 'Win Count',
+    max_level: 'Max Level',
+    battle_count: 'Battle Count',
+    max_rank_score: 'Max Rank Score'
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -127,215 +159,155 @@ export default function Home() {
       return 0
     }
 
-    const fetchTopHeroes = async (): Promise<HeroShowcase[]> => {
-      const response = await fetch(`${API_BASE}/heroes`, {
-        headers: { 'x-api-key': API_KEY },
+    const fetchTopHeroes = async (category: string): Promise<HeroShowcase[]> => {
+      const response = await fetch(`/api/heroes/top?category=${category}&limit=3`, {
         signal: controller.signal
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to load heroes (${response.status})`)
+        throw new Error(`Failed to load top heroes (${response.status})`)
       }
 
       const data = await response.json()
-      const heroesList = Array.isArray(data?.heroes)
-        ? data.heroes
-        : Array.isArray(data)
-        ? data
-        : Array.isArray(data?.data)
-        ? data.data
-        : []
+      const heroesList = Array.isArray(data?.heroes) ? data.heroes : []
 
-      const normalizedHeroes: HeroCandidate[] = heroesList
-        .filter((hero: any) => hero?.id || hero?.hero_id)
-        .map((hero: any) => ({
-          id: String(hero.id ?? hero.hero_id),
-          name: toTitleCase(hero.name ?? hero.hero_name ?? ''),
-          role: hero.role ? toTitleCase(hero.role) : undefined,
-          imageUrl: hero.imageUrl || hero.hero_icon || hero.icon || ''
-        }))
-
-      const best: HeroShowcase[] = []
-      const chunkSize = 6
-
-      for (let i = 0; i < normalizedHeroes.length; i += chunkSize) {
-        if (controller.signal.aborted) break
-        const chunk = normalizedHeroes.slice(i, i + chunkSize)
-        const results = await Promise.allSettled(
-          chunk.map(async (hero) => {
-            const statsResp = await fetch(`${API_BASE}/heroes/hero/${hero.id}/stats`, {
-              headers: { 'x-api-key': API_KEY },
-              signal: controller.signal
-            })
-            if (!statsResp.ok) {
-              throw new Error(`Failed to load stats for hero ${hero.id}`)
-            }
-            const stats = await statsResp.json()
-            return { hero, stats }
-          })
-        )
-
-        results.forEach((result) => {
-          if (result.status !== 'fulfilled') return
-          const { hero, stats } = result.value
-
-          const matches = parseNumber(stats.matches ?? stats.total_matches ?? stats.match_count)
-          const wins = parseNumber(stats.wins ?? stats.total_wins ?? stats.win_count)
-          if (!matches || matches < 20) return
-
-          const winRate = matches ? (wins / matches) * 100 : 0
-          if (!Number.isFinite(winRate)) return
-
-          const iconPaths = getAssetCandidates(stats.hero_icon || hero.imageUrl)
-          const showcase: HeroShowcase = {
-            id: hero.id,
-            name: hero.name || toTitleCase(stats.hero_name),
-            role: hero.role || (stats.role ? toTitleCase(stats.role) : undefined),
-            winRate,
-            matches,
-            wins,
-            iconPaths: iconPaths.length ? iconPaths : getAssetCandidates(hero.imageUrl)
-          }
-
-          best.push(showcase)
-          best.sort((a, b) => {
-            if (b.winRate !== a.winRate) return b.winRate - a.winRate
-            return (b.matches || 0) - (a.matches || 0)
-          })
-          if (best.length > 3) best.length = 3
-        })
-      }
-
-      return best
-    }
-
-    const fetchTopPlayers = async (): Promise<PlayerShowcase[]> => {
-      const response = await fetch(`${API_BASE_V2}/players/leaderboard?page=1&limit=3`, {
-        headers: { 'x-api-key': API_KEY },
-        signal: controller.signal
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to load leaderboard (${response.status})`)
-      }
-
-      const data = await response.json()
-      const playersList = Array.isArray(data?.players)
-        ? data.players
-        : Array.isArray(data)
-        ? data
-        : Array.isArray(data?.data)
-        ? data.data
-        : []
-
-      return playersList.slice(0, 3).map((player: any) => {
-        const info = player.info || {}
-        const rankInfo = player.rank || info.rank || {}
-        const matches = parseNumber(player.matches ?? rankInfo.battle_count)
-        const wins = parseNumber(player.wins ?? rankInfo.win_count)
-
-        let winRate = parseNumber(rankInfo.win_rate)
-        if (!winRate && matches > 0) {
-          winRate = (wins / matches) * 100
-        }
-        if (winRate && winRate <= 1) {
-          winRate = winRate * 100
-        }
-
-        const iconPaths = getAssetCandidates(player.icon?.player_icon || info.icon?.player_icon)
-        let rankLabel: string | undefined
-        let rankColor: string | undefined
-        let rankIconPaths: string[] | undefined
-
-        const rawRank = rankInfo.rank
-
-        if (typeof rawRank === 'string') {
-          rankLabel = rawRank
-        } else if (rawRank && typeof rawRank === 'object') {
-          rankLabel = rawRank.rank || rawRank.title || rawRank.name || undefined
-          if (rawRank.color && typeof rawRank.color === 'string') {
-            rankColor = rawRank.color
-          }
-          if (rawRank.image) {
-            rankIconPaths = getAssetCandidates(rawRank.image)
-          }
-        }
-
-        if (!rankLabel && typeof rankInfo.title === 'string') {
-          rankLabel = rankInfo.title
-        }
-
-        if (!rankColor && typeof rankInfo.color === 'string') {
-          rankColor = rankInfo.color
-        }
-
-        if (!rankIconPaths?.length && rankInfo.image) {
-          rankIconPaths = getAssetCandidates(rankInfo.image)
-        }
-
+      return heroesList.map((item: any) => {
+        const iconPaths = getAssetCandidates(item.image_url)
         return {
-          uid: String(player.uid ?? player.player_uid ?? info.player_uid ?? 'unknown'),
-          name: toTitleCase(player.name ?? info.name ?? 'Unknown Player'),
-          rank: rankLabel,
-          rankColor,
-          rankIconPaths,
-          score: parseNumber(player.score ?? rankInfo.rank_score),
-          winRate: Number.isFinite(winRate) ? winRate : undefined,
-          matches: matches || undefined,
-          wins: wins || undefined,
-          iconPaths
+          id: item.id,
+          name: toTitleCase(item.name || ''),
+          role: item.role ? toTitleCase(item.role) : undefined,
+          image_url: item.image_url,
+          displayValue: item.displayValue,
+          score: item.score,
+          stats: item.stats,
+          iconPaths: iconPaths.length ? iconPaths : []
         }
       })
     }
 
-    const loadShowcase = async () => {
+
+    const fetchTopPlayers = async (category: string): Promise<PlayerShowcase[]> => {
+      const response = await fetch(`/api/players/top?category=${category}&limit=3`, {
+        signal: controller.signal
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to load top players (${response.status})`)
+      }
+
+      const data = await response.json()
+      const playersList = Array.isArray(data?.players) ? data.players : []
+
+      return playersList.map((item: any) => {
+        const iconPaths = getAssetCandidates(item.player_icon)
+        return {
+          uid: item.uid,
+          name: toTitleCase(item.name || ''),
+          rank_label: item.rank_label,
+          rank_color: item.rank_color,
+          player_icon: item.player_icon,
+          displayValue: item.displayValue,
+          score: item.score,
+          win_count: item.win_count,
+          battle_count: item.battle_count,
+          win_rate: item.win_rate,
+          level: item.level,
+          max_level: item.max_level,
+          rank_score: item.rank_score,
+          max_rank_score: item.max_rank_score,
+          iconPaths: iconPaths.length ? iconPaths : []
+        }
+      })
+    }
+
+    const loadHeroes = async () => {
       try {
-        setShowcaseLoading(true)
-        setShowcaseError(null)
-
-        const errors: string[] = []
-
-        const heroPromise = fetchTopHeroes().catch((err) => {
+        setHeroLoading(true)
+        const heroResult = await fetchTopHeroes(selectedCategory).catch((err) => {
           console.error(err)
-          errors.push(err instanceof Error ? err.message : 'Failed to load hero highlights')
           return [] as HeroShowcase[]
         })
-        const playerPromise = fetchTopPlayers().catch((err) => {
-          console.error(err)
-          errors.push(err instanceof Error ? err.message : 'Failed to load player highlights')
-          return [] as PlayerShowcase[]
-        })
-
-        const [heroResult, playerResult] = await Promise.all([heroPromise, playerPromise])
-
         if (!cancelled) {
           setTopHeroes(heroResult)
-          setTopPlayers(playerResult)
-          if (errors.length > 0) {
-            setShowcaseError(errors[0])
-          } else if (heroResult.length === 0 && playerResult.length === 0) {
-            setShowcaseError('Live highlights are unavailable right now. Please try again later.')
-          }
         }
       } catch (err) {
-        if (!cancelled) {
-          const message = err instanceof Error ? err.message : 'Failed to load highlights'
-          setShowcaseError(message)
-        }
+        console.error('Failed to load heroes:', err)
       } finally {
         if (!cancelled) {
-          setShowcaseLoading(false)
+          setHeroLoading(false)
         }
       }
     }
 
-    loadShowcase()
+    const loadPlayers = async () => {
+      try {
+        setPlayerLoading(true)
+        const playerResult = await fetchTopPlayers(selectedPlayerCategory).catch((err) => {
+          console.error(err)
+          return [] as PlayerShowcase[]
+        })
+        if (!cancelled) {
+          setTopPlayers(playerResult)
+        }
+      } catch (err) {
+        console.error('Failed to load players:', err)
+      } finally {
+        if (!cancelled) {
+          setPlayerLoading(false)
+        }
+      }
+    }
+
+    loadHeroes()
+    loadPlayers()
 
     return () => {
       cancelled = true
       controller.abort()
     }
-  }, [])
+  }, [selectedCategory, selectedPlayerCategory])
+  
+  const formatDisplayValue = (value: string | number, category: string): string => {
+    if (value === '-' || value === null || value === undefined) return '-'
+    
+    if (category === 'playtime') {
+      return String(value)
+    }
+    
+    const num = typeof value === 'number' ? value : parseFloat(String(value))
+    if (!Number.isFinite(num)) return String(value)
+    
+    if (category === 'winrate') {
+      return `${num.toFixed(1)}%`
+    }
+    
+    if (category === 'damage' || category === 'damage_taken' || category === 'healing') {
+      if (num >= 1000000000) return `${(num / 1000000000).toFixed(2)}B`
+      if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`
+      if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
+      return num.toFixed(0)
+    }
+    
+    return num.toLocaleString()
+  }
+
+  const formatPlayerDisplayValue = (value: string | number, category: string): string => {
+    if (value === '-' || value === null || value === undefined) return '-'
+    
+    const num = typeof value === 'number' ? value : parseFloat(String(value))
+    if (!Number.isFinite(num)) return String(value)
+    
+    if (category === 'winrate') {
+      return `${num.toFixed(1)}%`
+    }
+    
+    if (category === 'score' || category === 'max_rank_score') {
+      return num.toLocaleString(undefined, { maximumFractionDigits: 2 })
+    }
+    
+    return num.toLocaleString()
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-black">
@@ -344,51 +316,71 @@ export default function Home() {
       
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="relative pt-40 pb-32 px-6 lg:px-8 overflow-hidden">
-          <div className="max-w-5xl mx-auto">
+        <section className="relative min-h-screen flex flex-col items-center justify-center px-6 lg:px-8 overflow-hidden">
+          <div className="max-w-5xl mx-auto flex flex-col items-center justify-center flex-1">
             {/* Logo */}
-            <div className="mb-16 flex justify-center">
-              <div className="relative w-auto h-40 sm:h-48 md:h-56 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+            <div className="mb-12 flex justify-center">
+              <div className="relative w-auto h-48 sm:h-56 md:h-64 lg:h-72 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
                 <Image
                   src={rivalsLogo}
                   alt="Marvel Rivals Logo"
-                  height={240}
-                  width={720}
+                  height={320}
+                  width={960}
                   className="h-full w-auto object-contain"
                   priority
                 />
               </div>
             </div>
 
-            <div className="text-center mb-12">
-              <p className="text-lg sm:text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed animate-fade-in-up relative z-10" style={{ animationDelay: '0.2s' }}>
-                The best way to keep tabs on your stats, performance, and everything Marvel Rivals.
+            <div className="text-center mb-16">
+              <p className="text-xl sm:text-2xl md:text-3xl text-gray-400 max-w-3xl mx-auto leading-relaxed animate-fade-in-up relative z-10" style={{ animationDelay: '0.2s' }}>
+                The internet's biggest collection of information about Marvel Rivals. Stats, Data, Patch Notes, and more.
               </p>
             </div>
 
-            {/* Modern Search Bar */}
-            <div className="max-w-2xl mx-auto mb-20 animate-scale-in" style={{ animationDelay: '0.4s' }}>
-              <div className={`relative transition-all duration-300 ${isFocused ? 'scale-[1.02]' : ''}`}>
-                <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/10 to-white/5 rounded-2xl blur-xl opacity-0 transition-opacity duration-300" style={{ opacity: isFocused ? 1 : 0 }}></div>
-                <div className="relative bg-white/[0.03] backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden transition-all duration-300 hover:border-white/20" style={{ borderColor: isFocused ? 'rgba(255, 255, 255, 0.3)' : undefined }}>
-                  <div className="flex items-center px-6 py-4">
-                    <svg className="w-5 h-5 text-gray-500 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    <input
-                      type="text"
-                      placeholder="Search for a player, hero, or match..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onFocus={() => setIsFocused(true)}
-                      onBlur={() => setIsFocused(false)}
-                      className="flex-1 bg-transparent text-white placeholder-gray-500 text-sm focus:outline-none"
-                    />
-                    <button className="ml-4 px-6 py-2.5 bg-white text-black text-sm font-medium rounded-xl hover:bg-gray-100 active:scale-95 transition-all duration-200 whitespace-nowrap">
-                      Search
-                    </button>
-                  </div>
+            {/* Navigation Buttons */}
+            <div className="flex flex-wrap justify-center gap-3 mb-16 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+              <Link
+                href="/heroes"
+                className="group relative flex flex-col items-center gap-2 px-6 py-3 rounded-xl border bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all duration-300"
+              >
+                <div className="transition-transform duration-300 group-hover:scale-105">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
                 </div>
+                <span className="text-xs font-medium whitespace-nowrap">Heroes</span>
+              </Link>
+              <Link
+                href="/leaderboards"
+                className="group relative flex flex-col items-center gap-2 px-4 py-3 rounded-xl border bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all duration-300"
+              >
+                <div className="transition-transform duration-300 group-hover:scale-105">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
+                </div>
+                <span className="text-xs font-medium whitespace-nowrap">Leaderboards</span>
+              </Link>
+              <Link
+                href="/players"
+                className="group relative flex flex-col items-center gap-2 px-6 py-3 rounded-xl border bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all duration-300"
+              >
+                <div className="transition-transform duration-300 group-hover:scale-105">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <span className="text-xs font-medium whitespace-nowrap">Players</span>
+              </Link>
+            </div>
+
+            {/* Animated Down Arrow */}
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
+              <div className="animate-bounce-slow">
+                <svg className="w-6 h-12 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+                </svg>
               </div>
             </div>
           </div>
@@ -397,58 +389,81 @@ export default function Home() {
         <section className="py-24 px-6 lg:px-8 border-t border-white/5">
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-12 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
-              <h2 className="text-2xl sm:text-3xl font-light mb-4 text-white">Live Highlights</h2>
+              <h2 className="text-2xl sm:text-3xl font-light mb-4 text-white">Hero Showcase</h2>
               <p className="text-gray-500 text-sm max-w-2xl mx-auto">
-                Fresh pulls from the Marvel Rivals API showcasing who&apos;s dominating right now.
+                Top heroes ranked by performance metrics from the database.
               </p>
             </div>
 
-            <div className="flex justify-center mb-10 animate-fade-in-up" style={{ animationDelay: '0.7s' }}>
-              <div className="flex bg-white/5 border border-white/10 rounded-full p-1">
+            <div className="flex justify-center flex-wrap gap-3 mb-10 animate-fade-in-up" style={{ animationDelay: '0.7s' }}>
+              {Object.entries(categoryLabels).map(([key, label], idx) => (
                 <button
+                  key={key}
                   type="button"
-                  onClick={() => setShowcaseView('heroes')}
-                  className={`px-5 py-2 text-sm font-medium rounded-full transition-all duration-200 ${
-                    showcaseView === 'heroes'
-                      ? 'bg-white text-black shadow-lg'
-                      : 'text-gray-300 hover:text-white'
+                  onClick={() => setSelectedCategory(key as any)}
+                  className={`group relative flex flex-col items-center gap-2 px-4 py-3 rounded-xl border transition-all duration-300 ${
+                    selectedCategory === key
+                      ? 'bg-white text-black border-white shadow-lg scale-105'
+                      : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:border-white/20 hover:text-white'
                   }`}
+                  style={{ animationDelay: `${0.8 + idx * 0.1}s` }}
                 >
-                  Top Heroes
+                  <div className={`transition-transform duration-300 ${selectedCategory === key ? 'scale-110' : 'group-hover:scale-105'}`}>
+                    {key === 'wins' && (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                      </svg>
+                    )}
+                    {key === 'winrate' && (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      </svg>
+                    )}
+                    {key === 'damage' && (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    )}
+                    {key === 'damage_taken' && (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    )}
+                    {key === 'healing' && (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                    )}
+                    {key === 'playtime' && (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    )}
+                  </div>
+                  <span className="text-xs font-medium whitespace-nowrap">{label}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setShowcaseView('players')}
-                  className={`px-5 py-2 text-sm font-medium rounded-full transition-all duration-200 ${
-                    showcaseView === 'players'
-                      ? 'bg-white text-black shadow-lg'
-                      : 'text-gray-300 hover:text-white'
-                  }`}
-                >
-                  Top Players
-                </button>
-              </div>
+              ))}
             </div>
 
-            {showcaseError && !showcaseLoading && (
-              <div className="border border-red-500/30 bg-red-500/10 rounded-2xl p-6 text-center text-red-300">
-                {showcaseError}
-              </div>
-            )}
-
-            {showcaseLoading ? (
+            {heroLoading ? (
               <div className="py-20 flex justify-center">
                 <div className="text-center">
                   <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
-                  <p className="text-gray-400 mt-4">Syncing with Helicarrier...</p>
+                  <p className="text-gray-400 mt-4">Loading hero showcase...</p>
                 </div>
               </div>
-            ) : showcaseView === 'heroes' ? (
+            ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {topHeroes.map((hero, index) => (
                   <div
-                    key={hero.id}
+                    key={`${hero.id}-${selectedCategory}-${index}`}
                     className="group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-purple-500/10 via-white/5 to-black/80 p-6 transition-all duration-300 transform hover:-translate-y-1 hover:border-white/25"
+                    style={{ 
+                      animationDelay: `${0.9 + index * 0.15}s`,
+                      opacity: 0,
+                      transform: 'translateY(30px)',
+                      animation: 'fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+                    }}
                   >
                     <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-gray-400">
                       <span>#{index + 1}</span>
@@ -460,23 +475,29 @@ export default function Home() {
                       </div>
                       <div>
                         <h3 className="text-2xl font-semibold text-white">{hero.name}</h3>
-                        <p className="text-sm text-gray-300/80">{formatNumber(hero.matches)} matches</p>
+                        <p className="text-sm text-gray-300/80">{categoryLabels[selectedCategory]}</p>
                       </div>
                     </div>
-                    <div className="mt-6 grid grid-cols-3 gap-3 text-xs text-gray-300">
-                      <div className="rounded-xl bg-black/40 border border-white/10 p-3 text-center">
-                        <div className="text-gray-500 uppercase tracking-[0.25em] mb-1">Win Rate</div>
-                        <div className="text-lg text-white">{formatWinRate(hero.winRate)}</div>
-                      </div>
-                      <div className="rounded-xl bg-black/40 border border-white/10 p-3 text-center">
-                        <div className="text-gray-500 uppercase tracking-[0.25em] mb-1">Wins</div>
-                        <div className="text-lg text-white">{formatNumber(hero.wins)}</div>
-                      </div>
-                      <div className="rounded-xl bg-black/40 border border-white/10 p-3 text-center">
-                        <div className="text-gray-500 uppercase tracking-[0.25em] mb-1">Losses</div>
-                        <div className="text-lg text-white">{formatNumber(hero.matches - hero.wins)}</div>
-                      </div>
+                    <div className="mt-6 border border-white/10 rounded-xl bg-black/40 p-4 text-center">
+                      <div className="text-gray-500 uppercase tracking-[0.25em] mb-2 text-xs">{categoryLabels[selectedCategory]}</div>
+                      <div className="text-3xl font-light text-white">{formatDisplayValue(hero.displayValue, selectedCategory)}</div>
                     </div>
+                    {hero.stats && (
+                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-gray-300">
+                        {hero.stats.matches !== undefined && (
+                          <div className="rounded-lg bg-black/40 border border-white/10 p-2 text-center">
+                            <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">Matches</div>
+                            <div className="text-sm text-white">{formatNumber(hero.stats.matches)}</div>
+                          </div>
+                        )}
+                        {hero.stats.wins !== undefined && (
+                          <div className="rounded-lg bg-black/40 border border-white/10 p-2 text-center">
+                            <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">Wins</div>
+                            <div className="text-sm text-white">{formatNumber(hero.stats.wins)}</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <Link
                       href={`/heroes/${hero.id}`}
                       className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-white/80 group-hover:text-white transition-colors"
@@ -495,16 +516,92 @@ export default function Home() {
                   </div>
                 )}
               </div>
+            )}
+          </div>
+        </section>
+
+        <section className="py-24 px-6 lg:px-8 border-t border-white/5">
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-12 animate-fade-in-up" style={{ animationDelay: '1.0s' }}>
+              <h2 className="text-2xl sm:text-3xl font-light mb-4 text-white">Player Showcase</h2>
+              <p className="text-gray-500 text-sm max-w-2xl mx-auto">
+                Top players ranked by performance metrics from the global leaderboard.
+              </p>
+            </div>
+
+            <div className="flex justify-center flex-wrap gap-3 mb-10 animate-fade-in-up" style={{ animationDelay: '1.1s' }}>
+              {Object.entries(playerCategoryLabels).map(([key, label], idx) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSelectedPlayerCategory(key as any)}
+                  className={`group relative flex flex-col items-center gap-2 px-4 py-3 rounded-xl border transition-all duration-300 ${
+                    selectedPlayerCategory === key
+                      ? 'bg-white text-black border-white shadow-lg scale-105'
+                      : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:border-white/20 hover:text-white'
+                  }`}
+                  style={{ animationDelay: `${1.2 + idx * 0.1}s` }}
+                >
+                  <div className={`transition-transform duration-300 ${selectedPlayerCategory === key ? 'scale-110' : 'group-hover:scale-105'}`}>
+                    {key === 'score' && (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    )}
+                    {key === 'winrate' && (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      </svg>
+                    )}
+                    {key === 'win_count' && (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                      </svg>
+                    )}
+                    {key === 'max_level' && (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    )}
+                    {key === 'battle_count' && (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    )}
+                    {key === 'max_rank_score' && (
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                      </svg>
+                    )}
+                  </div>
+                  <span className="text-xs font-medium whitespace-nowrap">{label}</span>
+                </button>
+              ))}
+            </div>
+
+            {playerLoading ? (
+              <div className="py-20 flex justify-center">
+                <div className="text-center">
+                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
+                  <p className="text-gray-400 mt-4">Loading player showcase...</p>
+                </div>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {topPlayers.map((player, index) => (
                   <div
-                    key={player.uid}
+                    key={`${player.uid}-${selectedPlayerCategory}-${index}`}
                     className="group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-blue-500/10 via-white/5 to-black/80 p-6 transition-all duration-300 transform hover:-translate-y-1 hover:border-white/25"
+                    style={{ 
+                      animationDelay: `${1.3 + index * 0.15}s`,
+                      opacity: 0,
+                      transform: 'translateY(30px)',
+                      animation: 'fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+                    }}
                   >
                     <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-gray-400">
                       <span>#{index + 1}</span>
-                      <span style={{ color: player.rankColor || undefined }}>{player.rank || 'Contender'}</span>
+                      <span style={{ color: player.rank_color || undefined }}>{player.rank_label || 'Contender'}</span>
                     </div>
                     <div className="mt-6 flex items-center gap-4">
                       <div className="relative w-16 h-16 rounded-full overflow-hidden border border-white/15 bg-black/40">
@@ -512,25 +609,29 @@ export default function Home() {
                       </div>
                       <div>
                         <h3 className="text-xl font-semibold text-white">{player.name}</h3>
-                        {player.score !== undefined && (
-                          <p className="text-sm text-gray-300/80">Score: {formatNumber(player.score)}</p>
+                        <p className="text-sm text-gray-300/80">{playerCategoryLabels[selectedPlayerCategory]}</p>
+                      </div>
+                    </div>
+                    <div className="mt-6 border border-white/10 rounded-xl bg-black/40 p-4 text-center">
+                      <div className="text-gray-500 uppercase tracking-[0.25em] mb-2 text-xs">{playerCategoryLabels[selectedPlayerCategory]}</div>
+                      <div className="text-3xl font-light text-white">{formatPlayerDisplayValue(player.displayValue, selectedPlayerCategory)}</div>
+                    </div>
+                    {(player.win_count !== undefined || player.battle_count !== undefined) && (
+                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-gray-300">
+                        {player.battle_count !== undefined && (
+                          <div className="rounded-lg bg-black/40 border border-white/10 p-2 text-center">
+                            <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">Battles</div>
+                            <div className="text-sm text-white">{formatNumber(player.battle_count)}</div>
+                          </div>
+                        )}
+                        {player.win_count !== undefined && (
+                          <div className="rounded-lg bg-black/40 border border-white/10 p-2 text-center">
+                            <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">Wins</div>
+                            <div className="text-sm text-white">{formatNumber(player.win_count)}</div>
+                          </div>
                         )}
                       </div>
-                    </div>
-                    <div className="mt-6 grid grid-cols-3 gap-3 text-xs text-gray-300">
-                      <div className="rounded-xl bg-black/40 border border-white/10 p-3 text-center">
-                        <div className="text-gray-500 uppercase tracking-[0.25em] mb-1">Win Rate</div>
-                        <div className="text-lg text-white">{player.winRate !== undefined ? formatWinRate(player.winRate) : '-'}</div>
-                      </div>
-                      <div className="rounded-xl bg-black/40 border border-white/10 p-3 text-center">
-                        <div className="text-gray-500 uppercase tracking-[0.25em] mb-1">Wins</div>
-                        <div className="text-lg text-white">{formatNumber(player.wins)}</div>
-                      </div>
-                      <div className="rounded-xl bg-black/40 border border-white/10 p-3 text-center">
-                        <div className="text-gray-500 uppercase tracking-[0.25em] mb-1">Matches</div>
-                        <div className="text-lg text-white">{formatNumber(player.matches)}</div>
-                      </div>
-                    </div>
+                    )}
                     <Link
                       href={`/players/${player.uid}`}
                       className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-white/80 group-hover:text-white transition-colors"
@@ -545,7 +646,7 @@ export default function Home() {
 
                 {topPlayers.length === 0 && (
                   <div className="col-span-full text-center text-gray-400 border border-white/10 bg-white/[0.02] rounded-2xl p-10">
-                    No leaderboard data available right now.
+                    No player data available right now.
                   </div>
                 )}
               </div>

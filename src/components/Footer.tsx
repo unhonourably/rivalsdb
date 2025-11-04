@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 export default function Footer() {
   return (
     <footer className="border-t border-white/5 bg-black">
@@ -7,15 +9,18 @@ export default function Footer() {
             © {new Date().getFullYear()} RivalsDB. Not affiliated with Marvel or NetEase Games.
           </p>
           <nav className="flex gap-6">
-            <a className="text-xs text-gray-500 hover:text-gray-300 transition-colors" href="#">
+            <Link className="text-xs text-gray-500 hover:text-gray-300 transition-colors" href="/terms">
               Terms
-            </a>
-            <a className="text-xs text-gray-500 hover:text-gray-300 transition-colors" href="#">
+            </Link>
+            <Link className="text-xs text-gray-500 hover:text-gray-300 transition-colors" href="/privacy">
               Privacy
-            </a>
-            <a className="text-xs text-gray-500 hover:text-gray-300 transition-colors" href="#">
+            </Link>
+            <Link className="text-xs text-gray-500 hover:text-gray-300 transition-colors" href="/info">
+              Info
+            </Link>
+            <Link className="text-xs text-gray-500 hover:text-gray-300 transition-colors" href="/contact">
               Contact
-            </a>
+            </Link>
           </nav>
         </div>
       </div>

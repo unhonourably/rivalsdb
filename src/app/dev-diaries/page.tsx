@@ -4,21 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 
-const API_KEY = '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
 const API_DOMAIN = 'https://marvelrivalsapi.com'
-const API_BASE = `${API_DOMAIN}/api/v1`
-
-interface DevDiariesResponse {
-  total_entries?: number
-  formatted_entries?: Array<{
-    id?: string | number
-    title?: string
-    date?: string
-    overview?: string
-    imagePath?: string
-    fullContent?: string
-  }>
-}
 
 interface DevDiaryEntry {
   id: string
@@ -46,15 +32,6 @@ const getAssetCandidates = (path?: string): string[] => {
   return Array.from(candidates)
 }
 
-const formatDateLabel = (value?: string | number): string | undefined => {
-  if (!value) return undefined
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    if (typeof value === 'string' && value.trim()) return value
-    return undefined
-  }
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-}
 
 const SmartImage: React.FC<{ paths: string[]; alt: string; className?: string }> = ({ paths, alt, className }) => {
   const [attempt, setAttempt] = useState(0)
@@ -86,26 +63,23 @@ export default function DevDiariesPage() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`${API_BASE}/dev-diaries?page=1&limit=50`, {
-        headers: { 'x-api-key': API_KEY },
+      const response = await fetch('/api/dev-diaries', {
+        cache: 'no-store',
         signal
       })
       if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please try again shortly.')
-        }
         throw new Error(`Failed to load dev diaries (${response.status})`)
       }
-      const data: DevDiariesResponse = await response.json()
-      const diaries = Array.isArray(data?.formatted_entries) ? data.formatted_entries : []
+      const data = await response.json()
+      const diaries = Array.isArray(data?.devDiaries) ? data.devDiaries : []
       setEntries(
-        diaries.map((entry, index) => ({
-          id: `dev-diary-${entry.id ?? index}`,
+        diaries.map((entry: any) => ({
+          id: entry.id ?? `dev-diary-${entry.title}`,
           title: entry.title ?? 'Dev Diary',
-          dateLabel: formatDateLabel(entry.date),
-          preview: entry.overview,
-          content: entry.fullContent,
-          imagePaths: getAssetCandidates(entry.imagePath)
+          dateLabel: entry.date_label,
+          preview: entry.preview,
+          content: entry.content,
+          imagePaths: getAssetCandidates(entry.image_path)
         }))
       )
     } catch (err) {
@@ -130,6 +104,16 @@ export default function DevDiariesPage() {
     fetchData()
   }
 
+  useEffect(() => {
+    if (selectedEntry) {
+      const original = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.body.style.overflow = original
+      }
+    }
+  }, [selectedEntry])
+
   const modalContent = useMemo(() => {
     if (!selectedEntry) return null
     return (
@@ -142,7 +126,7 @@ export default function DevDiariesPage() {
                 <SmartImage paths={selectedEntry.imagePaths} alt={selectedEntry.title} className="w-full h-full object-cover" />
               </div>
             )}
-            <div className="flex-1 p-6 overflow-y-auto">
+            <div className="flex-1 p-6 overflow-y-auto max-h-[85vh]">
               <div className="flex items-center justify-between gap-4 mb-4">
                 <div>
                   <div className="text-xs uppercase tracking-[0.3em] text-gray-400">Dev Diaries</div>
@@ -155,8 +139,8 @@ export default function DevDiariesPage() {
                   </svg>
                 </button>
               </div>
-              {selectedEntry.preview && <p className="text-gray-300 mb-4">{selectedEntry.preview}</p>}
-              <p className="text-gray-200 whitespace-pre-line">{selectedEntry.content ?? 'No additional details available.'}</p>
+              {selectedEntry.preview && <p className="text-gray-300 mb-4 break-words">{selectedEntry.preview}</p>}
+              <p className="text-gray-200 whitespace-pre-line break-words">{selectedEntry.content ?? 'No additional details available.'}</p>
             </div>
           </div>
         </div>

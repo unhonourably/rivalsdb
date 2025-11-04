@@ -386,6 +386,7 @@ const mergePlayerPayload = (payload: any): PlayerDetail => {
   if (candidatePlayer) {
     normalized.player = { ...candidatePlayer }
   }
+  
   const overallNode =
     resolveObject(normalized.overall_stats) ??
     resolveObject(base.overall_stats) ??
@@ -394,9 +395,46 @@ const mergePlayerPayload = (payload: any): PlayerDetail => {
     resolveObject(candidatePlayer?.overall_stats) ??
     resolveObject(candidatePlayer?.overall) ??
     resolveObject(base.overall) ??
-    resolveObject(nested?.overall)
+    resolveObject(nested?.overall) ??
+    resolveObject(base.data?.overall_stats) ??
+    resolveObject(nested?.data?.overall_stats) ??
+    resolveObject((payload as any)?.data?.overall_stats) ??
+    resolveObject(base.player?.overall_stats) ??
+    resolveObject(nested?.player?.overall_stats) ??
+    resolveObject((payload as any)?.player?.overall_stats) ??
+    resolveObject(base.stats?.overall_stats) ??
+    resolveObject(nested?.stats?.overall_stats) ??
+    resolveObject((payload as any)?.stats?.overall_stats) ??
+    (payload as any)?.overall_stats ??
+    base.overall_stats ??
+    nested?.overall_stats
+  
   if (overallNode) {
-    normalized.overall_stats = overallNode
+    normalized.overall_stats = { ...overallNode }
+    
+    if (normalized.overall_stats.roles_played) {
+      normalized.overall_stats.roles_played = { ...normalized.overall_stats.roles_played }
+    }
+    
+    console.log('Setting overall_stats in normalized:', {
+      hasRanked: !!normalized.overall_stats.ranked,
+      hasUnranked: !!normalized.overall_stats.unranked,
+      hasRolesPlayed: !!normalized.overall_stats.roles_played,
+      rolesPlayedType: typeof normalized.overall_stats.roles_played,
+      rolesPlayedKeys: normalized.overall_stats.roles_played ? Object.keys(normalized.overall_stats.roles_played) : [],
+      overallStatsKeys: Object.keys(normalized.overall_stats),
+      overallNodeKeys: Object.keys(overallNode),
+      overallNodeHasRolesPlayed: !!overallNode.roles_played
+    })
+  } else {
+    console.warn('No overall_stats found in payload:', {
+      payloadKeys: Object.keys(payload || {}),
+      baseKeys: Object.keys(base),
+      nestedKeys: nested ? Object.keys(nested) : [],
+      payloadOverallStats: !!(payload as any)?.overall_stats,
+      baseOverallStats: !!base.overall_stats,
+      nestedOverallStats: !!nested?.overall_stats
+    })
   }
   const arrayKeys = ['match_history', 'rank_history', 'hero_matchups', 'heroes_ranked', 'heroes_unranked', 'team_mates', 'maps']
   arrayKeys.forEach((key) => {
@@ -440,12 +478,28 @@ export default function PlayerDetailPage() {
 
   const [playerData, setPlayerData] = useState<PlayerDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingPhase, setLoadingPhase] = useState<string>('Checking database...')
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'matches' | 'heroes' | 'maps' | 'teammates'>('overview')
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [updateMessage, setUpdateMessage] = useState<string | null>(null)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [showStatsInfoModal, setShowStatsInfoModal] = useState(false)
   const [mapNames, setMapNames] = useState<Record<number, string>>({})
+  const [pushToDbStatus, setPushToDbStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [pushToDbMessage, setPushToDbMessage] = useState<string | null>(null)
+  const [updatedStats, setUpdatedStats] = useState<any>(null)
+
+  useEffect(() => {
+    if (showStatsInfoModal || showUpdateModal) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [showStatsInfoModal, showUpdateModal])
 
   useEffect(() => {
     let mounted = true
@@ -453,53 +507,169 @@ export default function PlayerDetailPage() {
     const fetchPlayerData = async () => {
       if (!playerId) return
 
-      const isNumericId = /^\d+$/.test(playerId)
-      const shouldPreferV1 = isNumericId && playerId.length <= 9
-      const endpointOrder = shouldPreferV1
-        ? [`${API_BASE}/player/${playerId}`, `${API_BASE_V2}/player/${playerId}`]
-        : [`${API_BASE_V2}/player/${playerId}`, `${API_BASE}/player/${playerId}`]
-
-      let lastError: Error | null = null
-      let lastStatus: number | undefined
-
       try {
         setLoading(true)
         setError(null)
         setUpdateStatus('idle')
         setUpdateMessage(null)
+        setPushToDbStatus('idle')
+        setPushToDbMessage(null)
+        setUpdatedStats(null)
+        setLoadingPhase('Checking database for cached profile...')
+
+        const dbResponse = await fetch(`/api/players/${playerId}`)
+        
+        if (dbResponse.ok) {
+          const dbResult = await dbResponse.json()
+          const dbPlayer = dbResult.player
+          const stats = dbResult.fullProfile || dbResult.stats
+
+          const isConsolePlayer = playerId.length <= 9
+          
+          console.log('DB Result:', {
+            playerId,
+            isConsolePlayer,
+            hasDbPlayer: !!dbPlayer,
+            hasStats: !!stats,
+            statsType: typeof stats,
+            statsKeys: stats ? Object.keys(stats) : [],
+            overallStatsDirect: stats?.overall_stats,
+            overallStatsDirectType: typeof stats?.overall_stats,
+            overallStatsDirectKeys: stats?.overall_stats ? Object.keys(stats.overall_stats) : [],
+            overallStatsPlayer: stats?.player?.overall_stats,
+            overallStatsData: stats?.data?.overall_stats,
+            hasRolesPlayed: !!stats?.overall_stats?.roles_played,
+            rolesPlayedKeys: stats?.overall_stats?.roles_played ? Object.keys(stats.overall_stats.roles_played) : [],
+            rawStatsString: stats ? JSON.stringify(stats).substring(0, 500) : null
+          })
+
+          if (dbPlayer && stats) {
+            const hasOverallStats = 
+              stats.overall_stats ||
+              stats.player?.overall_stats ||
+              stats.data?.overall_stats ||
+              resolveObject(stats)?.overall_stats ||
+              resolveObject(stats?.player)?.overall_stats ||
+              resolveObject(stats?.data)?.overall_stats
+
+            console.log('Has overall stats check:', {
+              hasOverallStats: !!hasOverallStats,
+              direct: !!stats.overall_stats,
+              player: !!stats.player?.overall_stats,
+              data: !!stats.data?.overall_stats,
+              resolved: !!resolveObject(stats)?.overall_stats
+            })
+
+            if (hasOverallStats) {
+              const needsBasicInfo = !dbPlayer.player_icon_id || !dbPlayer.login_os || !dbPlayer.level || !dbPlayer.rank_label || !dbPlayer.rank_color
+              
+              if (needsBasicInfo) {
+                setLoadingPhase('Profile found but missing basic info. Fetching from API to complete...')
+              } else {
+                setLoadingPhase('Loading profile from database...')
+                const normalized = mergePlayerPayload(stats)
+                console.log('After mergePlayerPayload:', {
+                  hasOverallStats: !!normalized.overall_stats,
+                  overallStatsKeys: normalized.overall_stats ? Object.keys(normalized.overall_stats) : [],
+                  hasRanked: !!normalized.overall_stats?.ranked,
+                  hasUnranked: !!normalized.overall_stats?.unranked,
+                  hasRolesPlayed: !!normalized.overall_stats?.roles_played
+                })
+                if (mounted) {
+                  setPlayerData(normalized)
+                  setLoading(false)
+                }
+                return
+              }
+            } else {
+              setLoadingPhase('Profile found but missing stats. Fetching from API...')
+            }
+          }
+          
+          if (dbPlayer && !stats) {
+            setLoadingPhase('Basic info found. Fetching full profile from API...')
+          }
+        }
+
+        setLoadingPhase('Profile not found in database. Fetching from API...')
+
+        const isNumericId = /^\d+$/.test(playerId)
+        const shouldPreferV1 = isNumericId && playerId.length <= 9
+        const endpointOrder = shouldPreferV1
+          ? [`${API_BASE}/player/${playerId}`, `${API_BASE_V2}/player/${playerId}`]
+          : [`${API_BASE_V2}/player/${playerId}`, `${API_BASE}/player/${playerId}`]
+
+        let lastError: Error | null = null
+        let lastStatus: number | undefined
+        let data: any = null
 
         for (const endpoint of endpointOrder) {
           try {
+            setLoadingPhase(`Trying ${endpoint.includes('/v1/') ? 'v1' : 'v2'} API endpoint...`)
             let response = await fetch(endpoint, {
               headers: { 'x-api-key': API_KEY }
             })
 
-            if (response.status === 405 || response.status === 404 || response.status === 403) {
-              response = await fetch(`${API_BASE}/player/${playerId}`, {
-                headers: { 'x-api-key': API_KEY }
-              })
-            }
-
             if (!response.ok) {
               if (response.status === 404) {
-                throw new Error('Player not found')
+                console.warn(`404 from ${endpoint}, trying next endpoint...`)
+                lastStatus = response.status
+                continue
               }
               if (response.status === 429) {
                 throw new Error('Rate limit exceeded. Please try again in a moment.')
               }
-              lastStatus = response.status
               if (response.status === 403) {
                 throw new Error('This player has set their profile to private.')
               }
+              if (response.status === 405) {
+                console.warn(`405 from ${endpoint}, trying next endpoint...`)
+                lastStatus = response.status
+                continue
+              }
+              lastStatus = response.status
               throw new Error(`Failed to load player data: ${response.status}`)
             }
 
-            const data = await response.json()
+            data = await response.json()
+            console.log(`Successfully fetched from ${endpoint}`)
             console.log('Player detail response:', data)
+            console.log('Overall stats location:', {
+              direct: data.overall_stats,
+              player: data.player?.overall_stats,
+              data: data.data?.overall_stats,
+              stats: data.stats?.overall_stats
+            })
+            
+            setLoadingPhase('Processing player data...')
             const normalized = mergePlayerPayload(data)
+            
+            console.log('Normalized overall_stats:', normalized.overall_stats)
+            console.log('Normalized player:', normalized.player)
 
             if (mounted) {
               setPlayerData(normalized)
+              setUpdatedStats(data)
+            }
+
+            setLoadingPhase('Saving complete profile to database (this may take a moment)...')
+            try {
+              const saveResponse = await fetch(`/api/players/${playerId}`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ fullProfile: data })
+              })
+              const saveResult = await saveResponse.json()
+              console.log('Save response:', saveResult)
+              setLoadingPhase('Profile saved! Finalizing...')
+            } catch (saveError) {
+              console.error('Failed to auto-save player profile to DB:', saveError)
+            }
+
+            if (mounted) {
+              setLoading(false)
             }
             return
           } catch (attemptError) {
@@ -507,7 +677,18 @@ export default function PlayerDetailPage() {
               ? attemptError
               : new Error('Failed to load player data')
             console.warn(`Player fetch failed for ${endpoint}:`, lastError.message)
+            if (attemptError instanceof Error && 
+                (attemptError.message.includes('private') || 
+                 attemptError.message.includes('Rate limit'))) {
+              break
+            }
             continue
+          }
+        }
+
+        if (!data) {
+          if (lastStatus === 404) {
+            lastError = new Error(`Player not found in ${endpointOrder.length === 2 ? 'v1 or v2' : 'the'} API`)
           }
         }
 
@@ -632,6 +813,7 @@ export default function PlayerDetailPage() {
     setShowUpdateModal(false)
     setUpdateStatus('loading')
     setUpdateMessage(null)
+    setUpdatedStats(null)
 
     const endpoint = `${API_BASE}/player/${playerId}/update`
 
@@ -665,12 +847,83 @@ export default function PlayerDetailPage() {
       }
 
       setUpdateStatus('success')
-      setUpdateMessage(resultMessage || 'Update request queued successfully.')
+      setUpdateMessage(resultMessage || 'Update request queued successfully. Please wait a few minutes and refresh the page to see updated stats.')
+      
+      setTimeout(async () => {
+        try {
+          const isNumericId = /^\d+$/.test(playerId)
+          const shouldPreferV1 = isNumericId && playerId.length <= 9
+          const endpointOrder = shouldPreferV1
+            ? [`${API_BASE}/player/${playerId}`, `${API_BASE_V2}/player/${playerId}`]
+            : [`${API_BASE_V2}/player/${playerId}`, `${API_BASE}/player/${playerId}`]
+
+          for (const endpoint of endpointOrder) {
+            try {
+              let fetchResponse = await fetch(endpoint, {
+                headers: { 'x-api-key': API_KEY }
+              })
+
+              if (fetchResponse.status === 405 || fetchResponse.status === 404 || fetchResponse.status === 403) {
+                fetchResponse = await fetch(`${API_BASE}/player/${playerId}`, {
+                  headers: { 'x-api-key': API_KEY }
+                })
+              }
+
+              if (fetchResponse.ok) {
+                const data = await fetchResponse.json()
+                setUpdatedStats(data)
+                setPlayerData(mergePlayerPayload(data))
+                break
+              }
+            } catch (e) {
+              continue
+            }
+          }
+        } catch (e) {
+          console.error('Failed to fetch updated stats:', e)
+        }
+      }, 5000)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to request update'
       setUpdateStatus('error')
       setUpdateMessage(message)
       console.error('Failed to request player update:', err)
+    }
+  }
+
+  const handlePushToDb = async () => {
+    if (!playerId || !playerData) return
+
+    setPushToDbStatus('loading')
+    setPushToDbMessage(null)
+
+    try {
+      const profileToSave = updatedStats || playerData
+
+      const response = await fetch(`/api/players/${playerId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ fullProfile: profileToSave })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to save profile to database')
+      }
+
+      setPushToDbStatus('success')
+      setPushToDbMessage('Full profile successfully saved to database!')
+      
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save profile'
+      setPushToDbStatus('error')
+      setPushToDbMessage(message)
+      console.error('Failed to push profile to DB:', err)
     }
   }
 
@@ -809,9 +1062,25 @@ export default function PlayerDetailPage() {
       <div className="min-h-screen flex flex-col bg-black">
         <Navbar />
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
-            <p className="text-gray-400 mt-4">Loading player data...</p>
+          <div className="text-center max-w-md px-6">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white mb-6"></div>
+            <p className="text-white text-lg font-medium mb-2">Loading Player Profile</p>
+            <p className="text-gray-400 text-sm mb-4">{loadingPhase}</p>
+            {loadingPhase.includes('Saving') && (
+              <div className="mt-4 text-xs text-gray-500 leading-relaxed">
+                <p>We're saving all player data including:</p>
+                <ul className="list-disc list-inside mt-2 space-y-1 text-gray-400">
+                  <li>Overall statistics</li>
+                  <li>Ranked and unranked stats</li>
+                  <li>Role statistics (Duelist, Strategist, Vanguard)</li>
+                  <li>Match history</li>
+                  <li>Hero performance data</li>
+                  <li>Map statistics</li>
+                  <li>Teammate information</li>
+                </ul>
+                <p className="mt-3 text-gray-500">This ensures faster loading on future visits.</p>
+              </div>
+            )}
           </div>
         </div>
         <Footer />
@@ -837,8 +1106,68 @@ export default function PlayerDetailPage() {
   }
 
   const player = playerData.player
-  const overallStats = playerData.overall_stats
-  const rankedStats = overallStats?.ranked
+  const overallStats = playerData.overall_stats || 
+    resolveObject((playerData.player as any)?.overall_stats) ||
+    resolveObject((playerData as any)?.data?.overall_stats) ||
+    resolveObject((playerData as any)?.stats?.overall_stats)
+  
+  const rankedStats = overallStats?.ranked || 
+    resolveObject(overallStats?.ranked) ||
+    resolveObject((playerData as any)?.overall_stats?.ranked) ||
+    resolveObject((playerData.player as any)?.overall_stats?.ranked)
+  
+  const unrankedStats = overallStats?.unranked || 
+    resolveObject(overallStats?.unranked) ||
+    resolveObject((playerData as any)?.overall_stats?.unranked) ||
+    resolveObject((playerData.player as any)?.overall_stats?.unranked)
+  
+  const getRankedValue = (field: string) => rankedStats?.[field] ?? null
+  const getUnrankedValue = (field: string) => unrankedStats?.[field] ?? null
+  const getCombinedNumeric = (field: string) => {
+    const ranked = getRankedValue(field)
+    const unranked = getUnrankedValue(field)
+    if (ranked !== null && unranked !== null) {
+      return ranked + unranked
+    }
+    return ranked ?? unranked ?? null
+  }
+  
+  const getCombinedTime = () => {
+    const rankedRaw = rankedStats?.total_time_played_raw
+    const unrankedRaw = unrankedStats?.total_time_played_raw
+    if (rankedRaw !== undefined && unrankedRaw !== undefined) {
+      const totalSeconds = rankedRaw + unrankedRaw
+      const hours = Math.floor(totalSeconds / 3600)
+      const minutes = Math.floor((totalSeconds % 3600) / 60)
+      const seconds = Math.floor(totalSeconds % 60)
+      return `${hours}h ${minutes}m ${seconds}s`
+    }
+    const rankedTime = rankedStats?.total_time_played
+    const unrankedTime = unrankedStats?.total_time_played
+    return rankedTime ?? unrankedTime ?? null
+  }
+  
+  const combinedStats: any = {
+    ...overallStats,
+    total_kills: overallStats?.total_kills ?? getCombinedNumeric('total_kills'),
+    total_deaths: overallStats?.total_deaths ?? getCombinedNumeric('total_deaths'),
+    total_assists: overallStats?.total_assists ?? getCombinedNumeric('total_assists'),
+    total_mvps: overallStats?.total_mvps ?? 
+      (rankedStats?.total_mvp !== undefined || unrankedStats?.total_mvp !== undefined
+        ? { mvps: (rankedStats?.total_mvp || 0) + (unrankedStats?.total_mvp || 0) }
+        : overallStats?.total_mvps),
+    total_svps: overallStats?.total_svps ?? 
+      (rankedStats?.total_svp !== undefined || unrankedStats?.total_svp !== undefined
+        ? { svps: (rankedStats?.total_svp || 0) + (unrankedStats?.total_svp || 0) }
+        : overallStats?.total_svps),
+    total_play_time: overallStats?.total_play_time ?? 
+      (getCombinedTime() ? { playtime: getCombinedTime() } : overallStats?.total_play_time),
+    ranked: rankedStats,
+    unranked: unrankedStats,
+    roles_played: overallStats?.roles_played
+  }
+  
+  const effectiveOverallStats = combinedStats
 
   return (
     <div className="min-h-screen flex flex-col bg-black">
@@ -859,26 +1188,63 @@ export default function PlayerDetailPage() {
               Back to Players
             </Link>
             <div className="flex flex-col items-start md:items-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowUpdateModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/15 bg-white/10 text-sm font-medium text-white hover:bg-white/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={updateStatus === 'loading'}
-              >
-                {updateStatus === 'loading' ? (
-                  <>
-                    <div className="inline-block animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                    Requesting...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    Request Live Update
-                  </>
-                )}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowUpdateModal(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/15 bg-white/10 text-sm font-medium text-white hover:bg-white/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled={updateStatus === 'loading'}
+                >
+                  {updateStatus === 'loading' ? (
+                    <>
+                      <div className="inline-block animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                      Requesting...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Request Live Update
+                    </>
+                  )}
+                </button>
+                <div className="relative group">
+                  <button
+                    type="button"
+                    onClick={handlePushToDb}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-green-500/50 bg-green-500/10 text-sm font-medium text-white hover:bg-green-500/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    disabled={pushToDbStatus === 'loading' || !playerData}
+                  >
+                    {pushToDbStatus === 'loading' ? (
+                      <>
+                        <div className="inline-block animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                        Saving...
+                      </>
+                    ) : pushToDbStatus === 'success' ? (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Saved
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        Push to DB
+                      </>
+                    )}
+                  </button>
+                  <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-black/95 border border-white/20 rounded-lg text-xs text-gray-300 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                    <p className="mb-2 font-medium text-white">Push Updated Stats to DB</p>
+                    <p className="leading-relaxed">
+                      This button saves the current player stats to the database. Use the &quot;Request Update&quot; button first to fetch fresh stats from the API, then click this to save them to the database. It is reccomended that you wait at least 15 minutes to push this button after you request your live update.
+                    </p>
+                  </div>
+                </div>
+              </div>
               {updateMessage && (
                 <span
                   className={`text-xs ${
@@ -892,8 +1258,54 @@ export default function PlayerDetailPage() {
                   {updateMessage}
                 </span>
               )}
+              {pushToDbStatus === 'error' && pushToDbMessage && (
+                <p className="text-xs text-red-400">{pushToDbMessage}</p>
+              )}
+              {pushToDbStatus === 'success' && pushToDbMessage && (
+                <p className="text-xs text-green-400">{pushToDbMessage}</p>
+              )}
             </div>
           </div>
+
+          {showStatsInfoModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-6">
+              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowStatsInfoModal(false)}></div>
+              <div className="relative w-full max-w-lg rounded-2xl border border-white/10 bg-black/90 p-8 shadow-2xl max-h-[85vh] overflow-y-auto">
+                <h2 className="text-2xl font-light text-white mb-4">Why Some Stats Are Missing</h2>
+                <div className="text-sm text-gray-300 leading-relaxed mb-6 space-y-4">
+                  <p>
+                    Console players (PlayStation, Xbox) receive a different API response structure compared to PC players. The Marvel Rivals API provides data in a different format for console platforms, which affects what statistics are available.
+                  </p>
+                  <p>
+                    <strong className="text-white">What you&apos;ll see for console players:</strong>
+                  </p>
+                  <ul className="list-disc list-inside space-y-2 ml-2">
+                    <li>Overall statistics (matches, wins, kills, deaths, assists, play time, MVPs, SVPs)</li>
+                    <li>Separate ranked and unranked statistics breakdowns</li>
+                    <li>Hero performance data</li>
+                    <li>Match history</li>
+                  </ul>
+                  <p>
+                    <strong className="text-white">What may be missing:</strong>
+                  </p>
+                  <ul className="list-disc list-inside space-y-2 ml-2">
+                    <li>Total damage, healing, and damage taken (not provided in console API responses)</li>
+                    <li>Per-minute statistics (calculated from data not available for console)</li>
+                    <li>Some role-specific breakdowns</li>
+                  </ul>
+                  <p className="text-xs text-gray-400 italic">
+                    This is a limitation of the Marvel Rivals API itself, not our database or display system. We combine and display all available data from both ranked and unranked matches to provide the most complete statistics possible.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowStatsInfoModal(false)}
+                  className="w-full px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-sm font-medium text-gray-300 hover:bg-white/10 transition-colors"
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          )}
 
           {showUpdateModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center px-6">
@@ -1017,18 +1429,18 @@ export default function PlayerDetailPage() {
             </div>
 
              {/* Overall Stats Summary */}
-            {overallStats && (
+            {effectiveOverallStats && (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                   <div className="text-3xl font-light mb-2 text-white">
-                    {formatValue(overallStats.total_matches ?? '-')}
+                    {formatValue(effectiveOverallStats.total_matches ?? '-')}
                   </div>
                   <div className="text-xs text-gray-400 uppercase tracking-wider">Matches</div>
                 </div>
                 <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                   <div className="text-3xl font-light mb-2 text-white">
                     {(() => {
-                      const value = extractStatValue(overallStats.total_wins, ['wins', 'total'])
+                      const value = extractStatValue(effectiveOverallStats.total_wins, ['wins', 'total'])
                       return value === null ? '-' : formatValue(value)
                     })()}
                   </div>
@@ -1037,8 +1449,8 @@ export default function PlayerDetailPage() {
                 <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                   <div className="text-3xl font-light mb-2 text-white">
                     {(() => {
-                      const matchesValue = extractStatValue(overallStats.total_matches)
-                      const winsValue = extractStatValue(overallStats.total_wins, ['wins', 'total'])
+                      const matchesValue = extractStatValue(effectiveOverallStats.total_matches)
+                      const winsValue = extractStatValue(effectiveOverallStats.total_wins, ['wins', 'total'])
                       const matches = Number(matchesValue)
                       const wins = Number(winsValue)
                       if (!Number.isFinite(matches) || matches <= 0) return '-'
@@ -1048,40 +1460,40 @@ export default function PlayerDetailPage() {
                   </div>
                   <div className="text-xs text-gray-400 uppercase tracking-wider">Win Rate</div>
                 </div>
-                {hasStatValue(overallStats.total_kills) && (
+                {hasStatValue(effectiveOverallStats.total_kills) && (
                   <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                     <div className="text-3xl font-light mb-2 text-white">
                       {(() => {
-                        const value = extractStatValue(overallStats.total_kills, ['kills', 'value', 'total'])
+                        const value = extractStatValue(effectiveOverallStats.total_kills, ['kills', 'value', 'total'])
                         return value === null ? '-' : formatValue(value)
                       })()}
                     </div>
                     <div className="text-xs text-gray-400 uppercase tracking-wider">Kills</div>
                   </div>
                 )}
-                {hasStatValue(overallStats.total_deaths) && (
+                {hasStatValue(effectiveOverallStats.total_deaths) && (
                   <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                     <div className="text-3xl font-light mb-2 text-white">
                       {(() => {
-                        const value = extractStatValue(overallStats.total_deaths, ['deaths', 'value', 'total'])
+                        const value = extractStatValue(effectiveOverallStats.total_deaths, ['deaths', 'value', 'total'])
                         return value === null ? '-' : formatValue(value)
                       })()}
                     </div>
                     <div className="text-xs text-gray-400 uppercase tracking-wider">Deaths</div>
                   </div>
                 )}
-                {hasStatValue(overallStats.overall_kd) && (
+                {hasStatValue(effectiveOverallStats.overall_kd) && (
                   <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                     <div className="text-3xl font-light mb-2 text-white">
-                      {formatRatio(extractStatValue(overallStats.overall_kd, ['kd', 'value', 'ratio']))}
+                      {formatRatio(extractStatValue(effectiveOverallStats.overall_kd, ['kd', 'value', 'ratio']))}
                     </div>
                     <div className="text-xs text-gray-400 uppercase tracking-wider">K/D</div>
                   </div>
                 )}
-                {hasStatValue(overallStats.overall_kda) && (
+                {hasStatValue(effectiveOverallStats.overall_kda) && (
                   <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                     <div className="text-3xl font-light mb-2 text-white">
-                      {formatRatio(extractStatValue(overallStats.overall_kda, ['kda', 'value', 'kda_raw']))}
+                      {formatRatio(extractStatValue(effectiveOverallStats.overall_kda, ['kda', 'value', 'kda_raw']))}
                     </div>
                     <div className="text-xs text-gray-400 uppercase tracking-wider">KDA</div>
                   </div>
@@ -1151,70 +1563,111 @@ export default function PlayerDetailPage() {
             {activeTab === 'overview' && (
               <div className="space-y-8">
                 {/* Overall Stats Details */}
-                {overallStats && (
+                {effectiveOverallStats && (
                   <div className="border border-white/10 bg-white/[0.02] rounded-2xl p-8">
-                    <h2 className="text-2xl font-light mb-6 text-white">Overall Statistics</h2>
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="text-2xl font-light text-white">Overall Statistics</h2>
+                      <button
+                        onClick={() => setShowStatsInfoModal(true)}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                      >
+                        Missing Stats?
+                      </button>
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                      {overallStats.total_play_time && (
+                      {effectiveOverallStats.total_play_time && (
                         <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                           <div className="text-2xl font-light mb-2 text-white">
-                            {overallStats.total_play_time.playtime ?? '-'}
+                            {effectiveOverallStats.total_play_time.playtime ?? '-'}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider">Play Time</div>
                         </div>
                       )}
-                      {overallStats.total_damage && (
+                      {hasStatValue(effectiveOverallStats.total_kills) && (
+                        <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
+                          <div className="text-3xl font-light mb-2 text-white">
+                            {(() => {
+                              const value = extractStatValue(effectiveOverallStats.total_kills, ['kills', 'value', 'total'])
+                              return value === null ? '-' : formatValue(value)
+                            })()}
+                          </div>
+                          <div className="text-xs text-gray-400 uppercase tracking-wider">Total Kills</div>
+                        </div>
+                      )}
+                      {hasStatValue(effectiveOverallStats.total_deaths) && (
+                        <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
+                          <div className="text-3xl font-light mb-2 text-white">
+                            {(() => {
+                              const value = extractStatValue(effectiveOverallStats.total_deaths, ['deaths', 'value', 'total'])
+                              return value === null ? '-' : formatValue(value)
+                            })()}
+                          </div>
+                          <div className="text-xs text-gray-400 uppercase tracking-wider">Total Deaths</div>
+                        </div>
+                      )}
+                      {hasStatValue(effectiveOverallStats.total_assists) && (
+                        <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
+                          <div className="text-3xl font-light mb-2 text-white">
+                            {(() => {
+                              const value = extractStatValue(effectiveOverallStats.total_assists, ['assists', 'value', 'total'])
+                              return value === null ? '-' : formatValue(value)
+                            })()}
+                          </div>
+                          <div className="text-xs text-gray-400 uppercase tracking-wider">Total Assists</div>
+                        </div>
+                      )}
+                      {effectiveOverallStats.total_damage && (
                         <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                           <div className="text-2xl font-light mb-2 text-white">
-                            {overallStats.total_damage.damage ?? '-'}
+                            {effectiveOverallStats.total_damage.damage ?? '-'}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider">Total Damage</div>
                         </div>
                       )}
-                      {overallStats.total_healing && (
+                      {effectiveOverallStats.total_healing && (
                         <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                           <div className="text-2xl font-light mb-2 text-white">
-                            {overallStats.total_healing.healing ?? '-'}
+                            {effectiveOverallStats.total_healing.healing ?? '-'}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider">Total Healing</div>
                         </div>
                       )}
-                      {overallStats.total_damage_taken && (
+                      {effectiveOverallStats.total_damage_taken && (
                         <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                           <div className="text-2xl font-light mb-2 text-white">
-                            {overallStats.total_damage_taken.damage_taken ?? '-'}
+                            {effectiveOverallStats.total_damage_taken.damage_taken ?? '-'}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider">Damage Taken</div>
                         </div>
                       )}
-                      {overallStats.per_minute && (
+                      {effectiveOverallStats.per_minute && (
                         <>
                           <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                             <div className="text-2xl font-light mb-2 text-white">
-                              {formatValue(overallStats.per_minute.total_damage_per_minute ?? 0)}/min
+                              {formatValue(effectiveOverallStats.per_minute.total_damage_per_minute ?? 0)}/min
                             </div>
                             <div className="text-xs text-gray-400 uppercase tracking-wider">Dmg/Min</div>
                           </div>
                           <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                             <div className="text-2xl font-light mb-2 text-white">
-                              {formatValue(overallStats.per_minute.total_healing_per_minute ?? 0)}/min
+                              {formatValue(effectiveOverallStats.per_minute.total_healing_per_minute ?? 0)}/min
                             </div>
                             <div className="text-xs text-gray-400 uppercase tracking-wider">Heal/Min</div>
                           </div>
                         </>
                       )}
-                      {overallStats.total_mvps && (
+                      {effectiveOverallStats.total_mvps && (
                         <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                           <div className="text-3xl font-light mb-2 text-white">
-                            {overallStats.total_mvps.mvps ?? 0}
+                            {effectiveOverallStats.total_mvps.mvps ?? 0}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider">MVPs</div>
                         </div>
                       )}
-                      {overallStats.total_svps && (
+                      {effectiveOverallStats.total_svps && (
                         <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
                           <div className="text-3xl font-light mb-2 text-white">
-                            {overallStats.total_svps.svps ?? 0}
+                            {effectiveOverallStats.total_svps.svps ?? 0}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider">SVPs</div>
                         </div>
@@ -1224,40 +1677,81 @@ export default function PlayerDetailPage() {
                 )}
 
                 {/* Ranked Stats */}
-                {rankedStats && (
+                {effectiveOverallStats?.ranked && (
                   <div className="border border-white/10 bg-white/[0.02] rounded-2xl p-8">
                     <h2 className="text-2xl font-light mb-6 text-white">Ranked Statistics</h2>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                       <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
-                        <div className="text-3xl font-light mb-2 text-white">{rankedStats.total_matches}</div>
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.ranked.total_matches ?? '-'}</div>
                         <div className="text-xs text-gray-400 uppercase tracking-wider">Matches</div>
                       </div>
                       <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
-                        <div className="text-3xl font-light mb-2 text-white">{rankedStats.total_wins}</div>
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.ranked.total_wins ?? '-'}</div>
                         <div className="text-xs text-gray-400 uppercase tracking-wider">Wins</div>
                       </div>
                       <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
-                        <div className="text-3xl font-light mb-2 text-white">{rankedStats.total_kills}</div>
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.ranked.total_kills ?? '-'}</div>
                         <div className="text-xs text-gray-400 uppercase tracking-wider">Kills</div>
                       </div>
                       <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
-                        <div className="text-3xl font-light mb-2 text-white">{rankedStats.total_deaths}</div>
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.ranked.total_deaths ?? '-'}</div>
                         <div className="text-xs text-gray-400 uppercase tracking-wider">Deaths</div>
                       </div>
                       <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
-                        <div className="text-3xl font-light mb-2 text-white">{rankedStats.total_assists}</div>
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.ranked.total_assists ?? '-'}</div>
                         <div className="text-xs text-gray-400 uppercase tracking-wider">Assists</div>
                       </div>
                       <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
-                        <div className="text-2xl font-light mb-2 text-white">{rankedStats.total_time_played}</div>
+                        <div className="text-2xl font-light mb-2 text-white">{effectiveOverallStats.ranked.total_time_played ?? '-'}</div>
                         <div className="text-xs text-gray-400 uppercase tracking-wider">Play Time</div>
                       </div>
                       <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
-                        <div className="text-3xl font-light mb-2 text-white">{rankedStats.total_mvp}</div>
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.ranked.total_mvp ?? 0}</div>
                         <div className="text-xs text-gray-400 uppercase tracking-wider">MVPs</div>
                       </div>
                       <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
-                        <div className="text-3xl font-light mb-2 text-white">{rankedStats.total_svp}</div>
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.ranked.total_svp ?? 0}</div>
+                        <div className="text-xs text-gray-400 uppercase tracking-wider">SVPs</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Unranked Stats */}
+                {effectiveOverallStats?.unranked && (
+                  <div className="border border-white/10 bg-white/[0.02] rounded-2xl p-8">
+                    <h2 className="text-2xl font-light mb-6 text-white">Unranked Statistics</h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.unranked.total_matches ?? '-'}</div>
+                        <div className="text-xs text-gray-400 uppercase tracking-wider">Matches</div>
+                      </div>
+                      <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.unranked.total_wins ?? '-'}</div>
+                        <div className="text-xs text-gray-400 uppercase tracking-wider">Wins</div>
+                      </div>
+                      <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.unranked.total_kills ?? '-'}</div>
+                        <div className="text-xs text-gray-400 uppercase tracking-wider">Kills</div>
+                      </div>
+                      <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.unranked.total_deaths ?? '-'}</div>
+                        <div className="text-xs text-gray-400 uppercase tracking-wider">Deaths</div>
+                      </div>
+                      <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.unranked.total_assists ?? '-'}</div>
+                        <div className="text-xs text-gray-400 uppercase tracking-wider">Assists</div>
+                      </div>
+                      <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
+                        <div className="text-2xl font-light mb-2 text-white">{effectiveOverallStats.unranked.total_time_played ?? '-'}</div>
+                        <div className="text-xs text-gray-400 uppercase tracking-wider">Play Time</div>
+                      </div>
+                      <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.unranked.total_mvp ?? 0}</div>
+                        <div className="text-xs text-gray-400 uppercase tracking-wider">MVPs</div>
+                      </div>
+                      <div className="text-center p-6 border border-white/10 rounded-xl bg-black/20">
+                        <div className="text-3xl font-light mb-2 text-white">{effectiveOverallStats.unranked.total_svp ?? 0}</div>
                         <div className="text-xs text-gray-400 uppercase tracking-wider">SVPs</div>
                       </div>
                     </div>
@@ -1265,87 +1759,87 @@ export default function PlayerDetailPage() {
                 )}
 
                 {/* Roles Played */}
-                {overallStats?.roles_played && (
+                {effectiveOverallStats?.roles_played && (
                   <div className="border border-white/10 bg-white/[0.02] rounded-2xl p-8">
                     <h2 className="text-2xl font-light mb-6 text-white">Role Statistics</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {overallStats.roles_played.duelist && (
+                      {effectiveOverallStats.roles_played.duelist && (
                         <div className="border border-white/10 rounded-xl p-6 bg-black/20">
                           <h3 className="text-xl font-medium mb-4 text-white">Duelist</h3>
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
                               <span className="text-gray-400">Matches:</span>
-                              <span className="text-white">{overallStats.roles_played.duelist.matches_played?.toFixed(1) ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.duelist.matches_played?.toFixed(1) ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Win Rate:</span>
-                              <span className="text-white">{overallStats.roles_played.duelist.win_percentage?.win_rate ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.duelist.win_percentage?.win_rate ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">K/D:</span>
-                              <span className="text-white">{overallStats.roles_played.duelist.kd_ratio?.kd ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.duelist.kd_ratio?.kd ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Kills:</span>
-                              <span className="text-white">{overallStats.roles_played.duelist.kills ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.duelist.kills ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Play Time:</span>
-                              <span className="text-white">{overallStats.roles_played.duelist.total_time_played?.playtime ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.duelist.total_time_played?.playtime ?? '-'}</span>
                             </div>
                           </div>
                         </div>
                       )}
-                      {overallStats.roles_played.strategist && (
+                      {effectiveOverallStats.roles_played.strategist && (
                         <div className="border border-white/10 rounded-xl p-6 bg-black/20">
                           <h3 className="text-xl font-medium mb-4 text-white">Strategist</h3>
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
                               <span className="text-gray-400">Matches:</span>
-                              <span className="text-white">{overallStats.roles_played.strategist.matches_played?.toFixed(1) ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.strategist.matches_played?.toFixed(1) ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Win Rate:</span>
-                              <span className="text-white">{overallStats.roles_played.strategist.win_percentage?.win_rate ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.strategist.win_percentage?.win_rate ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">K/D:</span>
-                              <span className="text-white">{overallStats.roles_played.strategist.kd_ratio?.kd ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.strategist.kd_ratio?.kd ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Kills:</span>
-                              <span className="text-white">{overallStats.roles_played.strategist.kills ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.strategist.kills ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Play Time:</span>
-                              <span className="text-white">{overallStats.roles_played.strategist.total_time_played?.playtime ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.strategist.total_time_played?.playtime ?? '-'}</span>
                             </div>
                           </div>
                         </div>
                       )}
-                      {overallStats.roles_played.vanguard && (
+                      {effectiveOverallStats.roles_played.vanguard && (
                         <div className="border border-white/10 rounded-xl p-6 bg-black/20">
                           <h3 className="text-xl font-medium mb-4 text-white">Vanguard</h3>
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
                               <span className="text-gray-400">Matches:</span>
-                              <span className="text-white">{overallStats.roles_played.vanguard.matches_played?.toFixed(1) ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.vanguard.matches_played?.toFixed(1) ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Win Rate:</span>
-                              <span className="text-white">{overallStats.roles_played.vanguard.win_percentage?.win_rate ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.vanguard.win_percentage?.win_rate ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">K/D:</span>
-                              <span className="text-white">{overallStats.roles_played.vanguard.kd_ratio?.kd ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.vanguard.kd_ratio?.kd ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Kills:</span>
-                              <span className="text-white">{overallStats.roles_played.vanguard.kills ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.vanguard.kills ?? '-'}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-400">Play Time:</span>
-                              <span className="text-white">{overallStats.roles_played.vanguard.total_time_played?.playtime ?? '-'}</span>
+                              <span className="text-white">{effectiveOverallStats.roles_played.vanguard.total_time_played?.playtime ?? '-'}</span>
                             </div>
                           </div>
                         </div>

@@ -1,15 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 
-const API_KEY = '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
-const API_BASE = 'https://marvelrivalsapi.com/api/v1'
-const ITEMS_PER_PAGE = 30
-
 interface ItemRecord {
-  id?: number | string
+  id: string
   name?: string
   description?: string
   long_description?: string
@@ -18,31 +14,30 @@ interface ItemRecord {
   type?: string
   item_type?: string
   slot?: string
-  group?: string
+  group_name?: string
   collection?: string
   rarity?: string
   tier?: string
   quality?: string
   grade?: string
+  cost_label?: string
+  currency?: string
+  unlock_condition?: string
+  requirement?: string
   icon?: string
   image?: string
   icon_url?: string
   thumbnail?: string
-  cost?: number | string
-  price?: number | string
-  shop_price?: number | string
-  purchase_cost?: number | string
-  credit_cost?: number | string
-  currency?: string
-  unlock_condition?: string
-  requirement?: string
   stats?: unknown
   attributes?: unknown
   effects?: unknown
   bonuses?: unknown
   passives?: unknown
   details?: unknown
-  [key: string]: unknown
+  raw?: unknown
+  categoryLabel?: string
+  typeLabel?: string
+  rarityLabel?: string
 }
 
 const toTitleCase = (input: string | undefined | null): string => {
@@ -142,17 +137,26 @@ const createList = (input: unknown): string[] => {
   return []
 }
 
+const pageSize = 30
+
 export default function ItemsPage() {
   const [items, setItems] = useState<ItemRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [category, setCategory] = useState('All')
-  const [currentPage, setCurrentPage] = useState(1)
+  const [availableCategories, setAvailableCategories] = useState<string[]>(['All'])
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalResults, setTotalResults] = useState(0)
 
   useEffect(() => {
-    setCurrentPage(1)
-  }, [searchQuery, category])
+    const timeout = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim())
+    }, 300)
+    return () => clearTimeout(timeout)
+  }, [searchQuery])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -162,66 +166,50 @@ export default function ItemsPage() {
       try {
         setLoading(true)
         setError(null)
-        const aggregated: ItemRecord[] = []
-        let page = 1
-        let totalPages = 1
-
-        while (page <= totalPages) {
-          const url = `${API_BASE}/items?page=${page}&limit=100`
-          const response = await fetch(url, {
-            headers: { 'x-api-key': API_KEY },
-            signal: controller.signal
-          })
-
-          if (!response.ok) {
-            if (response.status === 429) {
-              throw new Error('Rate limit exceeded. Please try again in a moment.')
-            }
-            throw new Error(`Failed to load items (${response.status})`)
-          }
-
-          const data = await response.json()
-          const list: ItemRecord[] = Array.isArray(data?.items)
-            ? data.items
-            : Array.isArray(data)
-            ? data
-            : Array.isArray(data?.data)
-            ? data.data
-            : []
-
-          aggregated.push(...list)
-
-          const totalFromResponse = Number(data?.total_pages) || Number(data?.total_items)
-          if (Number.isFinite(totalFromResponse) && list.length > 0) {
-            if (Number(data?.total_pages)) {
-              totalPages = Number(data.total_pages)
-            } else if (Number(data?.total_items)) {
-              totalPages = Math.ceil(Number(data.total_items) / list.length)
-            }
-          }
-
-          if (!Number.isFinite(totalPages) || totalPages <= 0) {
-            totalPages = page
-          }
-
-          page += 1
+        const params = new URLSearchParams()
+        params.set('page', String(page))
+        params.set('limit', String(pageSize))
+        if (debouncedQuery) {
+          params.set('search', debouncedQuery)
         }
-
-        if (!cancelled) {
-          const unique = new Map<string | number, ItemRecord>()
-          aggregated.forEach(item => {
-            const key = item.id ?? `${item.name}-${item.category}-${item.type}`
-            unique.set(key, item)
-          })
-          setItems(Array.from(unique.values()))
+        if (category !== 'All') {
+          params.set('category', category)
+        }
+        const response = await fetch(`/api/items?${params.toString()}`, {
+          signal: controller.signal
+        })
+        if (!response.ok) {
+          throw new Error(`Failed to load items (${response.status})`)
+        }
+        const data = await response.json()
+        const list: ItemRecord[] = Array.isArray(data?.items) ? data.items : []
+        if (cancelled) return
+        setItems(list.map(item => ({ ...item, id: String(item.id) })))
+        const incomingTotalPages = Math.max(Number(data?.totalPages) || 1, 1)
+        setTotalPages(incomingTotalPages)
+        const incomingTotal = Number(data?.total) || 0
+        setTotalResults(incomingTotal)
+        if (page > incomingTotalPages) {
+          setPage(incomingTotalPages)
+        }
+        if (Array.isArray(data?.categories)) {
+          const normalizedSet = new Set<string>(
+            data.categories
+              .filter((value: unknown): value is string => typeof value === 'string' && value.trim() !== '')
+              .map((entry: string) => toTitleCase(entry))
+              .filter((entry: string) => entry.trim() !== '')
+          )
+          const normalized = Array.from(normalizedSet)
+          const combined = ['All', ...normalized]
+          setAvailableCategories(combined)
+          if (category !== 'All' && !combined.includes(category)) {
+            setCategory('All')
+          }
         }
       } catch (err) {
-        if (controller.signal.aborted) return
-        if (!cancelled) {
-          const message = err instanceof Error ? err.message : 'Failed to load items'
-          setError(message)
-          console.error('Failed to fetch items:', err)
-        }
+        if (controller.signal.aborted || cancelled) return
+        const message = err instanceof Error ? err.message : 'Failed to load items'
+        setError(message)
       } finally {
         if (!cancelled) {
           setLoading(false)
@@ -235,59 +223,10 @@ export default function ItemsPage() {
       cancelled = true
       controller.abort()
     }
-  }, [])
+  }, [debouncedQuery, category, page])
 
-  const categories = useMemo(() => {
-    const unique = new Set<string>()
-    items.forEach(item => {
-      const candidate = toTitleCase(
-        (item.category as string) ||
-          (item.type as string) ||
-          (item.item_type as string) ||
-          (item.group as string) ||
-          (item.collection as string) ||
-          (item.slot as string)
-      )
-      if (candidate) {
-        unique.add(candidate)
-      }
-    })
-    return ['All', ...Array.from(unique).sort()]
-  }, [items])
-
-  const filtered = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
-    return items.filter(item => {
-      const categoryLabel = toTitleCase(
-        (item.category as string) ||
-          (item.type as string) ||
-          (item.item_type as string) ||
-          (item.group as string) ||
-          (item.collection as string) ||
-          (item.slot as string)
-      )
-      const matchesCategory = category === 'All' || categoryLabel === category
-      const descriptionText = `${item.description ?? ''} ${item.long_description ?? ''} ${item.summary ?? ''}`.toLowerCase()
-      const matchesQuery =
-        !query ||
-        item.name?.toLowerCase().includes(query) ||
-        descriptionText.includes(query)
-      return matchesCategory && matchesQuery
-    })
-  }, [items, searchQuery, category])
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE))
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages)
-    }
-  }, [currentPage, totalPages])
-
-  const pageItems = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE
-    return filtered.slice(start, start + ITEMS_PER_PAGE)
-  }, [filtered, currentPage])
+  const startRange = totalResults === 0 ? 0 : (page - 1) * pageSize + 1
+  const endRange = totalResults === 0 ? 0 : Math.min(page * pageSize, totalResults)
 
   return (
     <div className="min-h-screen flex flex-col bg-black">
@@ -308,15 +247,21 @@ export default function ItemsPage() {
                 type="text"
                 placeholder="Search items..."
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={e => {
+                  setSearchQuery(e.target.value)
+                  setPage(1)
+                }}
                 className="flex-1 sm:w-72 px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:border-white/30"
               />
               <select
                 value={category}
-                onChange={e => setCategory(e.target.value)}
+                onChange={e => {
+                  setCategory(e.target.value)
+                  setPage(1)
+                }}
                 className="flex-1 sm:w-48 px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:border-white/30"
               >
-                {categories.map(option => (
+                {availableCategories.map(option => (
                   <option key={option} value={option} className="text-black">
                     {option}
                   </option>
@@ -324,6 +269,41 @@ export default function ItemsPage() {
               </select>
             </div>
           </div>
+
+          {!loading && !error && (
+            <div className="flex items-center justify-between flex-wrap gap-4 mb-8 text-sm text-gray-400">
+              <div>
+                {totalResults > 0 ? (
+                  <span>
+                    Showing {startRange}–{endRange} of {totalResults} items
+                  </span>
+                ) : (
+                  <span>No items to display</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage(prev => Math.max(prev - 1, 1))}
+                  disabled={page <= 1 || loading}
+                  className="px-3 py-2 rounded-lg border border-white/10 text-white/80 hover:text-white hover:border-white/30 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                <div className="px-3 py-2 rounded-lg border border-white/10 text-white/80">
+                  Page {page} of {totalPages}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={page >= totalPages || loading || totalResults === 0}
+                  className="px-3 py-2 rounded-lg border border-white/10 text-white/80 hover:text-white hover:border-white/30 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
 
           {loading && (
             <div className="text-center py-20">
@@ -338,28 +318,50 @@ export default function ItemsPage() {
             </div>
           )}
 
-          {!loading && !error && (
+          {!loading && !error && items.length > 0 && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {pageItems.map(item => {
+                {items.map((item, index) => {
                   const iconCandidates = getAssetCandidates(
                     (item.icon as string) ||
                       (item.image as string) ||
                       (item.icon_url as string) ||
                       (item.thumbnail as string)
                   )
-                  const typeLabel = toTitleCase((item.type as string) || (item.item_type as string) || (item.slot as string))
-                  const categoryLabel = toTitleCase((item.category as string) || (item.group as string) || (item.collection as string))
-                  const rarityLabel = toTitleCase((item.rarity as string) || (item.tier as string) || (item.quality as string) || (item.grade as string))
-                  const costValue = formatNumber(item.cost ?? item.price ?? item.shop_price ?? item.purchase_cost ?? item.credit_cost)
+                  const typeLabel = item.typeLabel ?? toTitleCase((item.type as string) || (item.item_type as string) || (item.slot as string))
+                  const categoryLabel = item.categoryLabel ?? toTitleCase((item.category as string) || (item.group_name as string) || (item.collection as string) || (item.slot as string))
+                  const rarityLabel = item.rarityLabel ?? toTitleCase((item.rarity as string) || (item.tier as string) || (item.quality as string) || (item.grade as string))
+                  const rawSource = item.raw && typeof item.raw === 'object' ? (item.raw as Record<string, unknown>) : {}
+                  const rawCostValue = formatNumber(
+                    rawSource['cost'] ??
+                      rawSource['price'] ??
+                      rawSource['shop_price'] ??
+                      rawSource['purchase_cost'] ??
+                      rawSource['credit_cost']
+                  )
+                  const costValue = item.cost_label && item.cost_label.trim() !== '' ? item.cost_label : rawCostValue ?? undefined
+                  const rawCurrency = rawSource['currency']
+                  const currencyValue = typeof item.currency === 'string' && item.currency.trim() !== ''
+                    ? item.currency
+                    : typeof rawCurrency === 'string' && rawCurrency.trim() !== ''
+                      ? rawCurrency
+                      : undefined
+                  const rawUnlock = rawSource['unlock_condition'] ?? rawSource['requirement']
+                  const unlockValue = typeof item.unlock_condition === 'string' && item.unlock_condition.trim() !== ''
+                    ? item.unlock_condition
+                    : typeof item.requirement === 'string' && item.requirement.trim() !== ''
+                      ? item.requirement
+                      : typeof rawUnlock === 'string' && rawUnlock.trim() !== ''
+                        ? rawUnlock
+                        : undefined
                   const tags = [categoryLabel, rarityLabel].filter(Boolean)
                   const detailEntries = [
                     { label: 'Type', value: typeLabel },
                     { label: 'Category', value: categoryLabel },
                     { label: 'Rarity', value: rarityLabel },
                     { label: 'Cost', value: costValue },
-                    { label: 'Currency', value: item.currency as string },
-                    { label: 'Unlock', value: (item.unlock_condition as string) || (item.requirement as string) }
+                    { label: 'Currency', value: currencyValue },
+                    { label: 'Unlock', value: unlockValue }
                   ].filter(entry => Boolean(entry.value))
                   const sections = [
                     { title: 'Stats', lines: createList(item.stats) },
@@ -371,7 +373,11 @@ export default function ItemsPage() {
                   ].filter(section => section.lines.length > 0)
 
                   return (
-                    <div key={item.id ?? item.name} className="border border-white/10 bg-white/[0.02] rounded-2xl p-6 flex flex-col gap-4 hover:border-white/20 transition-all">
+                    <div
+                      key={item.id ?? item.name}
+                      className="border border-white/10 bg-white/[0.02] rounded-2xl p-6 flex flex-col gap-4 hover:border-white/20 transition-all opacity-0 animate-[fadeInUp_0.35s_ease_forwards]"
+                      style={{ animationDelay: `${Math.min(index, 12) * 40}ms` }}
+                    >
                       <div className="flex items-start gap-4">
                         {iconCandidates.length > 0 && (
                           <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-white/10">
@@ -434,39 +440,15 @@ export default function ItemsPage() {
                   )
                 })}
 
-                {filtered.length === 0 && (
-                  <div className="col-span-full text-center text-gray-400 py-20 border border-white/10 bg-white/[0.02] rounded-2xl">
-                    No items found.
-                  </div>
-                )}
               </div>
 
-              {filtered.length > 0 && totalPages > 1 && (
-                <div className="mt-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="text-sm text-gray-400">
-                    Page {currentPage} of {totalPages}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                      className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage === totalPages}
-                      className="px-4 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
             </>
+          )}
+
+          {!loading && !error && items.length === 0 && (
+            <div className="border border-white/10 bg-white/[0.02] rounded-2xl p-10 text-center text-gray-400">
+              No items match the current filters. Sync data via the admin page if needed.
+            </div>
           )}
         </div>
       </main>
@@ -483,8 +465,17 @@ export default function ItemsPage() {
         .scrollbar-thin::-webkit-scrollbar-track {
           background: transparent;
         }
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translate3d(0, 16px, 0);
+          }
+          to {
+            opacity: 1;
+            transform: translate3d(0, 0, 0);
+          }
+        }
       `}</style>
     </div>
   )
 }
-

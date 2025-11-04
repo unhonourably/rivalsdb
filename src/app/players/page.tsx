@@ -42,10 +42,7 @@ interface Player {
   svps?: number
 }
 
-const API_KEY = '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
-const API_BASE = 'https://marvelrivalsapi.com/api/v1'
 
-const QUICK_PLAYER_SUGGESTIONS = ['ToernB', 'pølly', 'cооper'] as const
 
 export default function PlayersPage() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -82,12 +79,7 @@ export default function PlayersPage() {
         setHasSearched(true)
 
         const response = await fetch(
-          `${API_BASE}/find-player/${encodeURIComponent(debouncedQuery)}`,
-          {
-            headers: {
-              'x-api-key': API_KEY
-            }
-          }
+          `/api/players/search?q=${encodeURIComponent(debouncedQuery)}`
         )
 
         if (!response.ok) {
@@ -95,36 +87,64 @@ export default function PlayersPage() {
             setError('Player not found')
             setPlayer(null)
           } else {
-            const errorText = await response.text()
-            throw new Error(`API Error: ${response.status} - ${errorText}`)
+            const errorData = await response.json()
+            throw new Error(errorData.error || `API Error: ${response.status}`)
           }
         } else {
-          const data = await response.json()
-          console.log('Player search response:', data)
+          const result = await response.json()
+          console.log('Player search response:', result)
 
-          // Handle different response formats
-          let playerData: Player | null = null
+          const dbPlayer = result.player
           
-          if (Array.isArray(data) && data.length > 0) {
-            playerData = data[0]
-          } else if (data.uid || data.name || data.player_uid || data.info) {
-            // API returns simple format with uid and name, or full player object
-            playerData = data
-          } else if (data.player) {
-            playerData = data.player
-          } else if (data.data) {
-            playerData = Array.isArray(data.data) ? data.data[0] : data.data
-          }
-          
-          if (playerData) {
+          if (dbPlayer) {
+            const playerData: Player = {
+              uid: dbPlayer.uid,
+              name: dbPlayer.name,
+              player_uid: dbPlayer.uid,
+              info: {
+                name: dbPlayer.name,
+                icon: dbPlayer.player_icon ? {
+                  player_icon: dbPlayer.player_icon,
+                  player_icon_id: dbPlayer.player_icon_id
+                } : undefined,
+                login_os: dbPlayer.login_os,
+                rank_season: dbPlayer.rank_score ? {
+                  level: dbPlayer.level,
+                  rank_score: dbPlayer.rank_score?.toString(),
+                  max_level: dbPlayer.max_level,
+                  max_rank_score: dbPlayer.max_rank_score?.toString(),
+                  win_count: dbPlayer.win_count,
+                  protect_score: dbPlayer.protect_score,
+                  diff_score: dbPlayer.diff_score?.toString()
+                } : undefined
+              }
+            }
+
+            if (dbPlayer.stats_json) {
+              try {
+                const stats = JSON.parse(dbPlayer.stats_json as string)
+                if (stats.overall_stats) {
+                  playerData.matches = stats.overall_stats.total_matches
+                  playerData.wins = typeof stats.overall_stats.total_wins === 'number' 
+                    ? stats.overall_stats.total_wins 
+                    : stats.overall_stats.total_wins?.wins
+                  playerData.kills = stats.overall_stats.total_kills
+                  playerData.deaths = stats.overall_stats.total_deaths
+                  playerData.assists = stats.overall_stats.total_assists
+                  playerData.mvps = stats.overall_stats.total_mvps?.mvps || stats.overall_stats.total_mvps
+                  playerData.svps = stats.overall_stats.total_svps?.svps || stats.overall_stats.total_svps
+                  playerData.play_time = stats.overall_stats.total_play_time?.playtime || stats.overall_stats.total_play_time?.time_played
+                  playerData.total_hero_damage = stats.overall_stats.total_damage?.toString()
+                  playerData.total_damage_taken = stats.overall_stats.total_damage_taken?.toString()
+                  playerData.total_hero_heal = stats.overall_stats.total_healing?.toString()
+                }
+              } catch (e) {
+                console.error('Failed to parse stats JSON:', e)
+              }
+            }
+
             setPlayer(playerData)
             setError(null)
-            // If we only got basic info (uid/name), try to fetch detailed stats
-            const playerId = playerData.uid || playerData.player_uid
-            if (playerId && (!playerData.matches && !playerData.info?.rank_season)) {
-              // Try to fetch detailed player stats using the uid
-              fetchPlayerDetails(playerId.toString())
-            }
           } else {
             setError('Player not found')
             setPlayer(null)
@@ -142,34 +162,6 @@ export default function PlayersPage() {
     searchPlayer()
   }, [debouncedQuery])
 
-  // Fetch detailed player information using uid
-  const fetchPlayerDetails = async (uid: string) => {
-    try {
-      // Try to fetch player details - adjust endpoint based on API docs
-      const detailResponse = await fetch(
-        `${API_BASE}/player/${uid}`,
-        {
-          headers: {
-            'x-api-key': API_KEY
-          }
-        }
-      )
-      
-      if (detailResponse.ok) {
-        const detailData = await detailResponse.json()
-        console.log('Player details response:', detailData)
-        
-        // Merge detailed data with existing player data
-        setPlayer(prev => prev ? { ...prev, ...detailData } : detailData)
-      } else {
-        // If detailed endpoint doesn't exist, that's okay - we have basic info
-        console.log('Detailed player endpoint not available, using basic info')
-      }
-    } catch (err) {
-      // Silently fail - we still have the basic player info
-      console.log('Could not fetch detailed player info:', err)
-    }
-  }
 
   const statCardBase = 'group/stat text-center p-6 border border-white/10 rounded-xl bg-black/20 shadow-[0_0_0_0_rgba(255,255,255,0)] transition-all duration-200 hover:border-white/25 hover:bg-black/30 hover:shadow-[0_12px_45px_-20px_rgba(255,255,255,0.45)]'
   const statLabelClass = 'text-xs text-gray-400 font-normal uppercase tracking-[0.35em]'
@@ -275,22 +267,6 @@ export default function PlayersPage() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400">
-                <span className="uppercase tracking-[0.3em] text-xs text-gray-500">Quick Picks</span>
-                {QUICK_PLAYER_SUGGESTIONS.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery(suggestion)
-                      setDebouncedQuery(suggestion)
-                    }}
-                    className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
-                  >
-                    #{suggestion}
-                  </button>
-                ))}
-              </div>
             </form>
           </div>
 
@@ -303,19 +279,17 @@ export default function PlayersPage() {
 
           {/* Player Results */}
           {player && !loading && (
-            <div className="animate-fade-in-up">
+            <div className="animate-fade-in-up mt-8">
               <Link
                 href={`/players/${player.uid || player.player_uid}`}
-                className="group relative block focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black rounded-3xl"
+                className="group relative block focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black rounded-2xl overflow-hidden"
               >
-                <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-red-500/20 via-transparent to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                <div className="relative border border-white/10 bg-white/[0.02] rounded-3xl p-8 md:p-10 transition-all duration-300 group-hover:border-white/25 group-hover:bg-white/[0.05] shadow-[0_35px_120px_-60px_rgba(255,255,255,0.45)]">
-                  {/* Player Header */}
-                  <div className="flex flex-col md:flex-row md:items-center gap-6 mb-10 pb-8 border-b border-white/10">
+                <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative border border-white/10 bg-white/[0.02] rounded-2xl p-6 transition-all duration-300 group-hover:border-white/20 group-hover:bg-white/[0.04]">
+                  <div className="flex items-center gap-4">
                     {player.info?.icon?.player_icon && (
-                      <div className="relative">
-                        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-red-500/30 to-white/10 blur-xl opacity-60"></div>
-                        <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-white/15 flex-shrink-0">
+                      <div className="relative flex-shrink-0">
+                        <div className="w-16 h-16 rounded-full overflow-hidden border border-white/15 bg-black/40">
                           <img
                             src={(() => {
                               const iconPath = player.info.icon.player_icon
@@ -355,158 +329,38 @@ export default function PlayersPage() {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h2 className="text-3xl font-light text-white">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h2 className="text-2xl font-light text-white truncate">
                           {player.info?.name || player.name || 'Unknown Player'}
                         </h2>
-                        {(player.uid || player.player_uid) && (
-                          <span className="px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs text-gray-300 tracking-wide">
-                            UID: {player.uid || player.player_uid}
-                          </span>
-                        )}
                         {player.info?.login_os && (
-                          <span className="px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs text-gray-300 tracking-wide uppercase">
+                          <span className="px-2 py-0.5 rounded border border-white/10 bg-white/5 text-xs text-gray-400 uppercase flex-shrink-0">
                             {player.info.login_os}
                           </span>
                         )}
                       </div>
-
-                      {(player.info?.rank_season || player.uid || player.player_uid) && (
-                        <div className="flex flex-wrap gap-3 mt-6">
-                          {player.info?.rank_season && (
-                            <>
-                              <div className="px-4 py-3 border border-white/10 bg-white/5 rounded-lg min-w-[160px]">
-                                <div className="text-xs text-gray-400 mb-1 uppercase tracking-[0.25em]">Rank Score</div>
-                                <div className="text-lg font-medium text-white">
-                                  {player.info.rank_season.rank_score || '-'}
-                                </div>
-                              </div>
-                              <div className="px-4 py-3 border border-white/10 bg-white/5 rounded-lg min-w-[160px]">
-                                <div className="text-xs text-gray-400 mb-1 uppercase tracking-[0.25em]">Rank Level</div>
-                                <div className="text-lg font-medium text-white">
-                                  {player.info.rank_season.level || '-'} / {player.info.rank_season.max_level || '-'}
-                                </div>
-                              </div>
-                              {player.info.rank_season.win_count !== undefined && (
-                                <div className="px-4 py-3 border border-white/10 bg-white/5 rounded-lg min-w-[140px]">
-                                  <div className="text-xs text-gray-400 mb-1 uppercase tracking-[0.25em]">Season Wins</div>
-                                  <div className="text-lg font-medium text-white">
-                                    {player.info.rank_season.win_count}
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )}
+                      <div className="flex items-center gap-4 text-sm text-gray-400">
+                        {(player.uid || player.player_uid) && (
+                          <span className="text-xs">UID: {player.uid || player.player_uid}</span>
+                        )}
+                        {player.info?.rank_season?.rank_score && (
+                          <span className="text-xs">
+                            Rank Score: <span className="text-white">{player.info.rank_season.rank_score}</span>
+                          </span>
+                        )}
+                        {player.info?.rank_season?.level && (
+                          <span className="text-xs">
+                            Level: <span className="text-white">{player.info.rank_season.level}/{player.info.rank_season.max_level}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Player Stats */}
-                  <div className="space-y-6">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <h3 className="text-xs uppercase tracking-[0.4em] text-gray-500">Key Highlights</h3>
-                      <span className="text-xs text-gray-500">Live data sourced from Marvel Rivals API</span>
+                    <div className="flex items-center gap-2 text-sm text-gray-400 group-hover:text-white transition-colors">
+                      <span>View Profile</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                      </svg>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                      {player.matches !== undefined && (
-                        <div className={statCardBase}>
-                          <div className={statValueLarge}>{formatValue(player.matches)}</div>
-                          <div className={statLabelClass}>Matches</div>
-                        </div>
-                      )}
-
-                      {player.wins !== undefined && (
-                        <div className={statCardBase}>
-                          <div className={statValueLarge}>{formatValue(player.wins)}</div>
-                          <div className={statLabelClass}>Wins</div>
-                        </div>
-                      )}
-
-                      {player.matches !== undefined && player.wins !== undefined && (
-                        <div className={statCardBase}>
-                          <div className={statValueLarge}>{getWinRate(player.wins, player.matches)}</div>
-                          <div className={statLabelClass}>Win Rate</div>
-                        </div>
-                      )}
-
-                      {player.kills !== undefined && (
-                        <div className={statCardBase}>
-                          <div className={statValueLarge}>{formatValue(player.kills)}</div>
-                          <div className={statLabelClass}>Kills</div>
-                        </div>
-                      )}
-
-                      {player.deaths !== undefined && (
-                        <div className={statCardBase}>
-                          <div className={statValueLarge}>{formatValue(player.deaths)}</div>
-                          <div className={statLabelClass}>Deaths</div>
-                        </div>
-                      )}
-
-                      {player.kills !== undefined && player.deaths !== undefined && (
-                        <div className={statCardBase}>
-                          <div className={statValueLarge}>{getKD(player.kills, player.deaths)}</div>
-                          <div className={statLabelClass}>K/D Ratio</div>
-                        </div>
-                      )}
-
-                      {player.assists !== undefined && (
-                        <div className={statCardBase}>
-                          <div className={statValueLarge}>{formatValue(player.assists)}</div>
-                          <div className={statLabelClass}>Assists</div>
-                        </div>
-                      )}
-
-                      {player.mvps !== undefined && (
-                        <div className={statCardBase}>
-                          <div className={statValueLarge}>{formatValue(player.mvps)}</div>
-                          <div className={statLabelClass}>MVPs</div>
-                        </div>
-                      )}
-
-                      {player.svps !== undefined && (
-                        <div className={statCardBase}>
-                          <div className={statValueLarge}>{formatValue(player.svps)}</div>
-                          <div className={statLabelClass}>SVPs</div>
-                        </div>
-                      )}
-
-                      {player.play_time && (
-                        <div className={statCardBase}>
-                          <div className={statValueMedium}>{player.play_time}</div>
-                          <div className={statLabelClass}>Play Time</div>
-                        </div>
-                      )}
-
-                      {player.total_hero_damage && (
-                        <div className={statCardBase}>
-                          <div className={statValueMedium}>{formatValue(parseFloat(player.total_hero_damage))}</div>
-                          <div className={statLabelClass}>Total Damage</div>
-                        </div>
-                      )}
-
-                      {player.total_damage_taken && (
-                        <div className={statCardBase}>
-                          <div className={statValueMedium}>{formatValue(parseFloat(player.total_damage_taken))}</div>
-                          <div className={statLabelClass}>Damage Taken</div>
-                        </div>
-                      )}
-
-                      {player.total_hero_heal && (
-                        <div className={statCardBase}>
-                          <div className={statValueMedium}>{formatValue(parseFloat(player.total_hero_heal))}</div>
-                          <div className={statLabelClass}>Total Healing</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-10 flex items-center gap-3 text-sm text-red-300 font-medium group-hover:text-red-200">
-                    <span>View full profile</span>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                    </svg>
                   </div>
                 </div>
               </Link>

@@ -4,22 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 
-const API_KEY = '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
 const API_DOMAIN = 'https://marvelrivalsapi.com'
-const API_BASE = `${API_DOMAIN}/api/v1`
-
-interface PatchNotesResponse {
-  total_patches?: number
-  formatted_patches?: Array<{
-    patchTitle?: string
-    patchDate?: string
-    patchType?: string
-    previewText?: string
-    imagePath?: string
-    fullContent?: string
-    htmlContent?: string
-  }>
-}
 
 interface PatchEntry {
   id: string
@@ -48,15 +33,6 @@ const getAssetCandidates = (path?: string): string[] => {
   return Array.from(candidates)
 }
 
-const formatDateLabel = (value?: string | number): string | undefined => {
-  if (!value) return undefined
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    if (typeof value === 'string' && value.trim()) return value
-    return undefined
-  }
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-}
 
 const SmartImage: React.FC<{ paths: string[]; alt: string; className?: string }> = ({ paths, alt, className }) => {
   const [attempt, setAttempt] = useState(0)
@@ -88,27 +64,24 @@ export default function PatchNotesPage() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`${API_BASE}/patch-notes?page=1&limit=50`, {
-        headers: { 'x-api-key': API_KEY },
+      const response = await fetch('/api/patch-notes', {
+        cache: 'no-store',
         signal
       })
       if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please try again shortly.')
-        }
         throw new Error(`Failed to load patch notes (${response.status})`)
       }
-      const data: PatchNotesResponse = await response.json()
-      const patches = Array.isArray(data?.formatted_patches) ? data.formatted_patches : []
+      const data = await response.json()
+      const patches = Array.isArray(data?.patchNotes) ? data.patchNotes : []
       setEntries(
-        patches.map((patch, index) => ({
-          id: `patch-note-${patch.patchTitle ?? index}`,
-          title: patch.patchTitle ?? patch.patchType ?? 'Patch Update',
-          dateLabel: formatDateLabel(patch.patchDate),
-          preview: patch.previewText,
-          content: patch.fullContent,
-          html: patch.htmlContent,
-          imagePaths: getAssetCandidates(patch.imagePath)
+        patches.map((patch: any) => ({
+          id: patch.id ?? `patch-${patch.title}`,
+          title: patch.title ?? 'Patch Update',
+          dateLabel: patch.date_label,
+          preview: patch.preview,
+          content: patch.content,
+          html: patch.html,
+          imagePaths: getAssetCandidates(patch.image_path)
         }))
       )
     } catch (err) {

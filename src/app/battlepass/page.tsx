@@ -4,9 +4,6 @@ import { useEffect, useMemo, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 
-const API_KEY = '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
-const API_BASE = 'https://marvelrivalsapi.com/api/v1'
-
 interface BattlePassItem {
   name?: string
   image?: string
@@ -19,33 +16,12 @@ interface BattlePassSeason {
   season?: number
   season_name?: string
   items?: BattlePassItem[]
-  [key: string]: unknown
 }
 
-const isBattlePassSeason = (value: unknown): value is BattlePassSeason => {
-  if (!value || typeof value !== 'object') return false
-  const record = value as Record<string, unknown>
-  if (Array.isArray(record.items)) return true
-  if (typeof record.season === 'number') return true
-  if (typeof record.season_name === 'string') return true
-  return false
-}
-
-const extractBattlePassSeasons = (payload: unknown): BattlePassSeason[] => {
-  if (Array.isArray(payload)) {
-    return payload.filter(isBattlePassSeason)
-  }
-  if (!payload || typeof payload !== 'object') return []
-  const record = payload as Record<string, unknown>
-  if ('data' in record) {
-    return extractBattlePassSeasons(record.data)
-  }
-  return isBattlePassSeason(payload) ? [payload] : []
-}
-
-const pickBattlePassSeason = (payload: unknown): BattlePassSeason | null => {
-  const seasons = extractBattlePassSeasons(payload)
-  return seasons.length > 0 ? seasons[0] : null
+interface BattlePassApiResponse {
+  season?: BattlePassSeason
+  availableSeasons?: number[]
+  error?: string
 }
 
 const getAssetCandidates = (path?: string): string[] => {
@@ -117,44 +93,57 @@ export default function BattlePassPage() {
   const [availableSeasons, setAvailableSeasons] = useState<number[]>([])
 
   useEffect(() => {
-    const fetchInitialSeason = async () => {
-      try {
-        setLoading(true)
-        setError(null)
+    loadSeason()
+  }, [])
 
-        const response = await fetch(`${API_BASE}/battlepass`, {
-          headers: { 'x-api-key': API_KEY }
-        })
-
-        if (!response.ok) {
-          throw new Error(`Failed to load battle pass data (${response.status})`)
-        }
-
-        const payload = await response.json()
-        const seasons = extractBattlePassSeasons(payload)
-
-        if (seasons.length === 0) {
-          throw new Error('No battle pass data available.')
-        }
-
-        const firstSeason = seasons[0]
-        setSeasonData(firstSeason)
-        setAvailableSeasons(
-          seasons
-            .map(entry => entry.season)
-            .filter((season): season is number => typeof season === 'number')
-        )
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load battle pass data'
-        setError(message)
-        console.error('Failed to fetch battle pass:', err)
-      } finally {
-        setLoading(false)
+  const loadSeason = async (season?: number) => {
+    const selected = season ?? Number(seasonInput)
+    if (season !== undefined || seasonInput.trim() !== '') {
+      if (!Number.isFinite(selected) || selected <= 0) {
+        setError('Enter a valid season number.')
+        return
       }
     }
 
-    fetchInitialSeason()
-  }, [])
+    try {
+      setLoading(true)
+      setError(null)
+
+      const params = new URLSearchParams()
+      if (season !== undefined) {
+        params.set('season', String(season))
+      } else if (seasonInput.trim() !== '') {
+        params.set('season', String(selected))
+      }
+
+      const response = await fetch(`/api/battlepass${params.toString() ? `?${params.toString()}` : ''}`, {
+        cache: 'no-store'
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        const message = typeof data?.error === 'string' ? data.error : `Failed to load battle pass (${response.status})`
+        throw new Error(message)
+      }
+
+      const payload = (await response.json()) as BattlePassApiResponse
+      if (!payload.season) {
+        throw new Error('No battle pass data available.')
+      }
+
+      setSeasonData(payload.season)
+      if (Array.isArray(payload.availableSeasons)) {
+        const normalized = Array.from(new Set(payload.availableSeasons.filter((value): value is number => typeof value === 'number')))
+        normalized.sort((a, b) => a - b)
+        setAvailableSeasons(normalized)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load battle pass data'
+      setError(message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const seasonsList = useMemo(() => {
     const existing = new Set<number>()
@@ -166,47 +155,6 @@ export default function BattlePassPage() {
     list.sort((a, b) => a - b)
     return list
   }, [availableSeasons, seasonData])
-
-  const handleFetchSeason = async (season?: number) => {
-    const selected = season ?? Number(seasonInput)
-    if (!Number.isFinite(selected) || selected <= 0) {
-      setError('Enter a valid season number.')
-      return
-    }
-
-    try {
-      setLoading(true)
-      setError(null)
-
-      const url = `${API_BASE}/battlepass?season=${selected}`
-      const response = await fetch(url, {
-        headers: { 'x-api-key': API_KEY }
-      })
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error(`Season ${selected} was not found.`)
-        }
-        throw new Error(`Failed to load season ${selected} (${response.status})`)
-      }
-
-      const payload = await response.json()
-      const seasonDataPayload = pickBattlePassSeason(payload)
-
-      if (!seasonDataPayload) {
-        throw new Error('Unexpected response for battle pass season.')
-      }
-
-      setSeasonData(seasonDataPayload)
-      setAvailableSeasons(prev => (prev.includes(selected) ? prev : [...prev, selected]))
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load battle pass data'
-      setError(message)
-      console.error('Failed to fetch battle pass season:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const items = seasonData?.items ?? []
 
@@ -241,7 +189,7 @@ export default function BattlePassPage() {
               />
               <button
                 type="button"
-                onClick={() => handleFetchSeason()}
+                onClick={() => loadSeason()}
                 className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white hover:bg-white/10 transition-colors"
                 disabled={loading}
               >

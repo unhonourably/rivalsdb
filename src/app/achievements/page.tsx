@@ -1,11 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
-
-const API_KEY = '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
-const API_BASE = 'https://marvelrivalsapi.com/api/v1'
 
 interface AchievementTier {
   tier?: number
@@ -85,7 +82,20 @@ export default function AchievementsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [category, setCategory] = useState('All')
+  const [availableCategories, setAvailableCategories] = useState<string[]>(['All'])
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalResults, setTotalResults] = useState(0)
+  const pageSize = 24
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim())
+    }, 300)
+    return () => clearTimeout(timeout)
+  }, [searchQuery])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -95,65 +105,50 @@ export default function AchievementsPage() {
       try {
         setLoading(true)
         setError(null)
-        const aggregated: Achievement[] = []
-        let page = 1
-        let totalPages = 1
-
-        while (page <= totalPages) {
-          const url = `${API_BASE}/achievements?page=${page}&limit=100`
-          const response = await fetch(url, {
-            headers: { 'x-api-key': API_KEY },
-            signal: controller.signal
-          })
-
-          if (!response.ok) {
-            if (response.status === 429) {
-              throw new Error('Rate limit exceeded. Please try again in a moment.')
-            }
-            throw new Error(`Failed to load achievements (${response.status})`)
-          }
-
-          const data = await response.json()
-          const items: Achievement[] = Array.isArray(data?.achievements)
-            ? data.achievements
-            : Array.isArray(data)
-            ? data
-            : Array.isArray(data?.data)
-            ? data.data
-            : []
-
-          aggregated.push(...items)
-
-          const reportedTotal = Number(data?.total_pages) || Number(data?.total_achievements)
-          if (Number.isFinite(reportedTotal) && items.length > 0) {
-            if (Number(data?.total_pages)) {
-              totalPages = Number(data.total_pages)
-            } else if (Number(data?.total_achievements)) {
-              totalPages = Math.ceil(Number(data.total_achievements) / items.length)
-            }
-          }
-
-          if (!Number.isFinite(totalPages) || totalPages <= 0) {
-            totalPages = page // prevent infinite loop
-          }
-
-          page += 1
+        const params = new URLSearchParams()
+        params.set('page', String(page))
+        params.set('limit', String(pageSize))
+        if (debouncedQuery) {
+          params.set('search', debouncedQuery)
         }
-
-        if (!cancelled) {
-          const unique = new Map<string | number, Achievement>()
-          aggregated.forEach((achievement) => {
-            unique.set(achievement.id ?? `${achievement.name}-${achievement.category}`, achievement)
-          })
-          setAchievements(Array.from(unique.values()))
+        if (category !== 'All') {
+          params.set('category', category)
+        }
+        const response = await fetch(`/api/achievements?${params.toString()}`, {
+          signal: controller.signal
+        })
+        if (!response.ok) {
+          throw new Error(`Failed to load achievements (${response.status})`)
+        }
+        const data = await response.json()
+        const items: Achievement[] = Array.isArray(data?.achievements) ? data.achievements : []
+        if (cancelled) return
+        setAchievements(items)
+        const incomingTotalPages = Math.max(Number(data?.totalPages) || 1, 1)
+        setTotalPages(incomingTotalPages)
+        const incomingTotal = Number(data?.total) || 0
+        setTotalResults(incomingTotal)
+        if (page > incomingTotalPages) {
+          setPage(incomingTotalPages)
+        }
+        if (Array.isArray(data?.categories)) {
+          const normalizedSet = new Set<string>(
+            data.categories
+              .map((value: unknown) => (typeof value === 'string' ? value : ''))
+              .filter(Boolean)
+              .map((value: string) => toTitleCase(value))
+          )
+          const normalized = Array.from(normalizedSet)
+          const combined = ['All', ...normalized]
+          setAvailableCategories(combined)
+          if (category !== 'All' && !combined.includes(category)) {
+            setCategory('All')
+          }
         }
       } catch (err) {
-        if (controller.signal.aborted) return
-        if (!cancelled) {
-          const message = err instanceof Error ? err.message : 'Failed to load achievements'
-          setError(message)
-          console.error('Failed to fetch achievements:', err)
-        }
+        if (controller.signal.aborted || cancelled) return
+        const message = err instanceof Error ? err.message : 'Failed to load achievements'
+        setError(message)
       } finally {
         if (!cancelled) {
           setLoading(false)
@@ -167,28 +162,10 @@ export default function AchievementsPage() {
       cancelled = true
       controller.abort()
     }
-  }, [])
+  }, [debouncedQuery, category, page, pageSize])
 
-  const categories = useMemo(() => {
-    const unique = new Set<string>()
-    achievements.forEach((achievement) => {
-      if (achievement.category) {
-        unique.add(toTitleCase(achievement.category))
-      }
-    })
-    return ['All', ...Array.from(unique).sort()]
-  }, [achievements])
-
-  const filtered = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
-    return achievements.filter((achievement) => {
-      const matchesCategory = category === 'All' || toTitleCase(achievement.category) === category
-      const matchesQuery = !query ||
-        achievement.name?.toLowerCase().includes(query) ||
-        achievement.description?.toLowerCase().includes(query)
-      return matchesCategory && matchesQuery
-    })
-  }, [achievements, searchQuery, category])
+  const startRange = totalResults === 0 ? 0 : (page - 1) * pageSize + 1
+  const endRange = totalResults === 0 ? 0 : Math.min(page * pageSize, totalResults)
 
   return (
     <div className="min-h-screen flex flex-col bg-black">
@@ -209,15 +186,21 @@ export default function AchievementsPage() {
                 type="text"
                 placeholder="Search achievements..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  setPage(1)
+                }}
                 className="flex-1 sm:w-72 px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:border-white/30"
               />
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e) => {
+                  setCategory(e.target.value)
+                  setPage(1)
+                }}
                 className="flex-1 sm:w-48 px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white focus:outline-none focus:border-white/30"
               >
-                {categories.map((option) => (
+                {availableCategories.map((option) => (
                   <option key={option} value={option} className="text-black">
                     {option}
                   </option>
@@ -225,6 +208,41 @@ export default function AchievementsPage() {
               </select>
             </div>
           </div>
+
+          {!loading && !error && (
+            <div className="flex items-center justify-between flex-wrap gap-4 mb-8 text-sm text-gray-400">
+              <div>
+                {totalResults > 0 ? (
+                  <span>
+                    Showing {startRange}–{endRange} of {totalResults} achievements
+                  </span>
+                ) : (
+                  <span>No achievements to display</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={page <= 1 || loading}
+                  className="px-3 py-2 rounded-lg border border-white/10 text-white/80 hover:text-white hover:border-white/30 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                <div className="px-3 py-2 rounded-lg border border-white/10 text-white/80">
+                  Page {page} of {totalPages}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={page >= totalPages || loading || totalResults === 0}
+                  className="px-3 py-2 rounded-lg border border-white/10 text-white/80 hover:text-white hover:border-white/30 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
 
           {loading && (
             <div className="text-center py-20">
@@ -239,15 +257,19 @@ export default function AchievementsPage() {
             </div>
           )}
 
-          {!loading && !error && (
+          {!loading && !error && achievements.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filtered.map((achievement) => {
+              {achievements.map((achievement, index) => {
                 const iconCandidates = getAssetCandidates(achievement.icon)
                 const tiers = achievement.tiers || []
                 const rarity = achievement.rarity ? toTitleCase(achievement.rarity) : null
 
                 return (
-                  <div key={achievement.id} className="border border-white/10 bg-white/[0.02] rounded-2xl p-6 flex flex-col gap-4 hover:border-white/20 transition-all">
+                  <div
+                    key={achievement.id}
+                    className="border border-white/10 bg-white/[0.02] rounded-2xl p-6 flex flex-col gap-4 hover:border-white/20 transition-all opacity-0 animate-[fadeInUp_0.35s_ease_forwards]"
+                    style={{ animationDelay: `${Math.min(index, 12) * 40}ms` }}
+                  >
                     <div className="flex items-start gap-4">
                       {iconCandidates.length > 0 && (
                         <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-white/10">
@@ -298,12 +320,12 @@ export default function AchievementsPage() {
                   </div>
                 )
               })}
+            </div>
+          )}
 
-              {filtered.length === 0 && (
-                <div className="col-span-full text-center text-gray-400 py-20 border border-white/10 bg-white/[0.02] rounded-2xl">
-                  No achievements found.
-                </div>
-              )}
+          {!loading && !error && achievements.length === 0 && (
+            <div className="border border-white/10 bg-white/[0.02] rounded-2xl p-10 text-center text-gray-400">
+              No achievements match the current filters. Sync data via the admin page if needed.
             </div>
           )}
         </div>
@@ -320,6 +342,16 @@ export default function AchievementsPage() {
         }
         .scrollbar-thin::-webkit-scrollbar-track {
           background: transparent;
+        }
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translate3d(0, 16px, 0);
+          }
+          to {
+            opacity: 1;
+            transform: translate3d(0, 0, 0);
+          }
         }
       `}</style>
     </div>

@@ -5,36 +5,28 @@ import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 
-const API_KEY = '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
-const API_BASE_V2 = 'https://marvelrivalsapi.com/api/v2'
 const PAGE_LIMIT = 25
 
 interface LeaderboardPlayer {
-  score: number
   uid: string
   name: string
-  icon?: {
-    player_icon_id?: string
-    player_icon?: string
-  }
-  rank?: {
-    rank?: {
-      rank: string
-      image?: string
-      color?: string
-    }
-    win_rate?: string
-    max_level?: number
-    rank_score?: number
-    protect_score?: number
-    diff_score?: number
-    season_number?: number
-    win_count?: number
-    level?: number
-    max_rank_score?: number
-    season_max_level?: number
-    battle_count?: number
-  }
+  score: number
+  rank_score?: number
+  rank_label?: string
+  rank_color?: string
+  rank_image?: string
+  win_rate?: string
+  win_count?: number
+  battle_count?: number
+  level?: number
+  season_max_level?: number
+  max_level?: number
+  protect_score?: number
+  diff_score?: number
+  max_rank_score?: number
+  season_number?: number
+  player_icon?: string
+  rank_position?: number
 }
 
 interface LeaderboardResponse {
@@ -94,18 +86,17 @@ export default function LeaderboardsPage() {
         setLoading(true)
         setError(null)
 
+        await fetch('/api/leaderboard/auto-refresh', { cache: 'no-store' }).catch(() => {})
+
         const response = await fetch(
-          `${API_BASE_V2}/players/leaderboard?page=${page}&limit=${PAGE_LIMIT}`,
+          `/api/leaderboard?page=${page}&limit=${PAGE_LIMIT}`,
           {
-            headers: { 'x-api-key': API_KEY },
             signal: controller.signal,
+            cache: 'no-store'
           }
         )
 
         if (!response.ok) {
-          if (response.status === 429) {
-            throw new Error('Rate limit exceeded. Please try again shortly.')
-          }
           throw new Error(`Failed to load leaderboard (${response.status})`)
         }
 
@@ -215,9 +206,9 @@ export default function LeaderboardsPage() {
           ) : (
             <div className="space-y-4">
               {players.map((player, index) => {
-                const rankNumber = firstRankIndex + index + 1
-                const iconCandidates = getIconCandidates(player.icon?.player_icon)
-                const primaryColor = player.rank?.rank?.color || '#ffffff'
+                const rankNumber = player.rank_position ?? (firstRankIndex + index + 1)
+                const iconCandidates = getIconCandidates(player.player_icon)
+                const primaryColor = player.rank_color || '#ffffff'
 
                 return (
                   <div
@@ -237,7 +228,7 @@ export default function LeaderboardsPage() {
                               data-attempt="0"
                               onError={(event) => {
                                 const target = event.target as HTMLImageElement
-                                const attempts = getIconCandidates(player.icon?.player_icon)
+                                const attempts = getIconCandidates(player.player_icon)
                                 const nextAttempt = Number(target.dataset.attempt || '0') + 1
                                 const nextSrc = attempts[nextAttempt]
                                 if (nextSrc) {
@@ -269,10 +260,10 @@ export default function LeaderboardsPage() {
                             <span>UID:</span>
                             <span className="text-white/80">{player.uid}</span>
                           </div>
-                          {player.rank?.rank?.rank && (
+                          {player.rank_label && (
                             <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 border border-white/10 rounded-full bg-black/40 text-sm">
                               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: primaryColor }}></span>
-                              <span className="text-white">{player.rank.rank.rank}</span>
+                              <span className="text-white">{player.rank_label}</span>
                             </div>
                           )}
                         </div>
@@ -280,7 +271,7 @@ export default function LeaderboardsPage() {
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between">
                             <span className="text-gray-400">Rank Score</span>
-                            <span className="text-white">{formatNumber(player.rank?.rank_score, 2)}</span>
+                            <span className="text-white">{formatNumber(player.rank_score, 2)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-400">Score</span>
@@ -288,26 +279,26 @@ export default function LeaderboardsPage() {
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-400">Diff</span>
-                            <span className="text-white">{formatNumber(player.rank?.diff_score, 2)}</span>
+                            <span className="text-white">{formatNumber(player.diff_score, 2)}</span>
                           </div>
                         </div>
 
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between">
                             <span className="text-gray-400">Win Rate</span>
-                            <span className="text-white">{player.rank?.win_rate || '-'}</span>
+                            <span className="text-white">{player.win_rate || '-'}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-400">Wins / Battles</span>
                             <span className="text-white">
-                              {formatNumber(player.rank?.win_count, 0)} / {formatNumber(player.rank?.battle_count, 0)}
+                              {formatNumber(player.win_count, 0)} / {formatNumber(player.battle_count, 0)}
                             </span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-400">Level (Max)</span>
                             <span className="text-white">
-                              {formatNumber(player.rank?.level, 0)}
-                              {player.rank?.season_max_level ? ` / ${formatNumber(player.rank.season_max_level, 0)}` : ''}
+                              {formatNumber(player.level, 0)}
+                              {player.season_max_level ? ` / ${formatNumber(player.season_max_level, 0)}` : ''}
                             </span>
                           </div>
                         </div>

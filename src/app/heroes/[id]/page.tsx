@@ -84,8 +84,6 @@ interface Hero {
   transformations?: any[]
 }
 
-const API_KEY = '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
-const API_BASE = 'https://marvelrivalsapi.com/api/v1'
 
 export default function HeroDetailPage() {
   const params = useParams()
@@ -128,9 +126,8 @@ export default function HeroDetailPage() {
         setLoadingStats(true)
         setLoadingCostumes(true)
         
-        // Fetch hero data first (most important - show page immediately after this loads)
-        const heroResponse = await fetch(`${API_BASE}/heroes/hero/${heroId}`, {
-          headers: { 'x-api-key': API_KEY }
+        const heroResponse = await fetch(`/api/heroes/${heroId}`, {
+          cache: 'no-store'
         })
         
         if (!heroResponse.ok) {
@@ -138,61 +135,51 @@ export default function HeroDetailPage() {
         }
 
         const heroData = await heroResponse.json()
-        const heroObj = Array.isArray(heroData) ? heroData[0] : heroData
+        const heroObj = {
+          ...heroData,
+          imageUrl: heroData.image_url ?? heroData.imageUrl,
+          abilities: (heroData.abilities ?? []).map((ability: any) => ({
+            ...ability,
+            name: ability.ability_name ?? ability.name,
+            isCollab: ability.is_collab ?? ability.isCollab,
+            additional_fields: ability.additional_fields ?? {}
+          }))
+        }
         setHero(heroObj)
-        setLoading(false) // Show hero info immediately, don't wait for stats/costumes
+        setLoading(false)
 
-        // Fetch stats and costumes in parallel (non-blocking)
-        const statsPromise = fetch(`${API_BASE}/heroes/hero/${heroId}/stats`, {
-          headers: { 'x-api-key': API_KEY }
+        const statsPromise = fetch(`/api/heroes/${heroId}/stats`, {
+          cache: 'no-store'
         }).then(async (statsResponse) => {
           if (statsResponse.ok) {
             const statsData = await statsResponse.json()
             setStats(statsData)
           }
           setLoadingStats(false)
-        }).catch((err) => {
-          console.error('Error fetching stats:', err)
+        }).catch(() => {
           setLoadingStats(false)
         })
 
-        const costumesUrl = `https://marvelrivalsapi.com/api/v2/heroes/hero/${heroId}/costumes`
-        const costumesPromise = fetch(costumesUrl, {
-          headers: { 'x-api-key': API_KEY }
+        const costumesPromise = fetch(`/api/heroes/${heroId}/costumes`, {
+          cache: 'no-store'
         }).then(async (costumesResponse) => {
           if (costumesResponse.ok) {
             const costumesData = await costumesResponse.json()
-            const costumesList = Array.isArray(costumesData)
-              ? costumesData
-              : costumesData.costumes || costumesData.data || []
-            if (costumesList.length > 0) {
-              setCostumes(costumesList)
-            } else if (heroObj.costumes && Array.isArray(heroObj.costumes) && heroObj.costumes.length > 0) {
-              // Fallback to costumes from hero data
-              setCostumes(heroObj.costumes)
-            }
-          } else {
-            // Fallback to costumes from hero data if v2 endpoint fails
-            if (heroObj.costumes && Array.isArray(heroObj.costumes) && heroObj.costumes.length > 0) {
-              setCostumes(heroObj.costumes)
-            }
+            const costumesList = Array.isArray(costumesData) ? costumesData : []
+            setCostumes(costumesList.map((costume: any) => ({
+              ...costume,
+              imageUrl: costume.image_url ?? costume.imageUrl ?? costume.icon
+            })))
           }
           setLoadingCostumes(false)
-        }).catch((err) => {
-          console.error('Error fetching costumes from v2:', err)
-          // Fallback to costumes from hero data if request fails
-          if (heroObj.costumes && Array.isArray(heroObj.costumes) && heroObj.costumes.length > 0) {
-            setCostumes(heroObj.costumes)
-          }
+        }).catch(() => {
           setLoadingCostumes(false)
         })
 
-        // Wait for both to complete (but don't block UI)
         await Promise.allSettled([statsPromise, costumesPromise])
 
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load hero data')
-        console.error('Error:', err)
         setLoading(false)
         setLoadingStats(false)
         setLoadingCostumes(false)
@@ -202,61 +189,57 @@ export default function HeroDetailPage() {
     fetchHeroData()
   }, [heroId])
 
-  // Fetch leaderboard when platform changes or leaderboard tab is active
   useEffect(() => {
     const fetchLeaderboard = async () => {
       if (!heroId) return
       
-      // Only fetch if leaderboard tab is active
       if (activeTab !== 'leaderboard') {
         return
       }
 
       setLoadingLeaderboard(true)
-      setLeaderboard([]) // Clear previous data while loading
-      setLeaderboardPage(1) // Reset to first page when fetching new data
+      setLeaderboard([])
+      setLeaderboardPage(1)
       
       try {
-        console.log(`Fetching leaderboard for hero ${heroId} on platform ${platform}`)
         const leaderboardResponse = await fetch(
-          `${API_BASE}/heroes/leaderboard/${heroId}?platform=${platform}`,
+          `/api/heroes/${heroId}/leaderboard?platform=${platform}`,
           {
-            headers: { 'x-api-key': API_KEY }
+            cache: 'no-store'
           }
         )
         
         if (leaderboardResponse.ok) {
           const leaderboardData = await leaderboardResponse.json()
-          console.log('Leaderboard response:', leaderboardData)
+          const entries = Array.isArray(leaderboardData?.players) ? leaderboardData.players : []
           
-          // Handle different response formats
-          let entries: LeaderboardEntry[] = []
-          
-          if (leaderboardData.players && Array.isArray(leaderboardData.players)) {
-            entries = leaderboardData.players
-          } else if (Array.isArray(leaderboardData)) {
-            entries = leaderboardData
-          } else if (leaderboardData.leaderboard && Array.isArray(leaderboardData.leaderboard)) {
-            entries = leaderboardData.leaderboard
-          } else if (leaderboardData.data && Array.isArray(leaderboardData.data)) {
-            entries = leaderboardData.data
-          }
-          
-          // Add rank numbers and ensure proper structure
-          entries = entries.map((entry, index) => ({
-            ...entry,
-            rank: index + 1
-          }))
-          
-          console.log('Parsed leaderboard entries:', entries.length, entries)
-          setLeaderboard(entries)
+          setLeaderboard(entries.map((entry: any) => ({
+            rank: entry.rank ?? 0,
+            player_uid: entry.player_uid,
+            info: {
+              name: entry.player_name,
+              icon: { player_icon: entry.player_icon },
+              rank_season: {
+                rank_score: entry.rank_score,
+                level: entry.rank_level
+              }
+            },
+            wins: entry.wins,
+            matches: entry.matches,
+            kills: entry.kills,
+            deaths: entry.deaths,
+            assists: entry.assists,
+            play_time: entry.play_time,
+            total_hero_damage: entry.total_hero_damage,
+            total_damage_taken: entry.total_damage_taken,
+            total_hero_heal: entry.total_hero_heal,
+            mvps: entry.mvps,
+            svps: entry.svps
+          })))
         } else {
-          const errorText = await leaderboardResponse.text()
-          console.error('Leaderboard error:', leaderboardResponse.status, errorText)
           setLeaderboard([])
         }
       } catch (err) {
-        console.error('Error fetching leaderboard:', err)
         setLeaderboard([])
       } finally {
         setLoadingLeaderboard(false)
@@ -1038,43 +1021,65 @@ export default function HeroDetailPage() {
                           .replace(/\b\w/g, l => l.toUpperCase())
                       }
 
-                      const formatValue = (val: any): string => {
+                      const formatValue = (val: any, key?: string): string => {
                         if (val === null || val === undefined) return '-'
-                        if (typeof val === 'string') {
-                          // If it's already a formatted string (like "266h 52m 18s"), return as-is
-                          return val
-                        }
+                        
+                        let numValue: number | null = null
                         if (typeof val === 'number') {
-                          // Percentage values (0-1 range, but not 0 or 1 exactly)
-                          if (val > 0 && val < 1 && val !== Math.floor(val)) {
-                            const percentage = val * 100
-                            if (percentage < 0.1) {
-                              return `${percentage.toFixed(2)}%`
-                            }
-                            return `${percentage.toFixed(1)}%`
+                          numValue = val
+                        } else if (typeof val === 'string') {
+                          if (/^\d+\.?\d*$/.test(val.trim())) {
+                            numValue = parseFloat(val)
+                          } else if (val.includes('h') || val.includes('m') || val.includes('s')) {
+                            return val
+                          } else {
+                            return val
                           }
-                          // Very large numbers - use M/B notation
-                          if (Math.abs(val) >= 1000000000) {
-                            return `${(val / 1000000000).toFixed(2)}B`
-                          }
-                          if (Math.abs(val) >= 1000000) {
-                            return `${(val / 1000000).toFixed(2)}M`
-                          }
-                          // Large numbers - add commas, no decimals
-                          if (Math.abs(val) >= 1000) {
-                            return val.toLocaleString(undefined, { maximumFractionDigits: 0 })
-                          }
-                          // Decimals - show 2 decimal places for readability
-                          if (val !== Math.floor(val)) {
-                            // For very small decimals, show more precision
-                            if (Math.abs(val) < 0.01) {
-                              return val.toFixed(4)
-                            }
-                            return val.toFixed(2)
-                          }
-                          return val.toString()
                         }
-                        return String(val)
+                        
+                        if (numValue === null) return String(val)
+                        
+                        const absVal = Math.abs(numValue)
+                        const isDamageField = key && ['total_hero_damage', 'total_damage_taken', 'total_hero_heal'].includes(key.toLowerCase())
+                        
+                        if (isDamageField) {
+                          if (absVal >= 1000000000) {
+                            return `${(numValue / 1000000000).toFixed(2)}B`
+                          }
+                          if (absVal >= 1000000) {
+                            return `${(numValue / 1000000).toFixed(2)}M`
+                          }
+                          if (absVal >= 1000) {
+                            return `${(numValue / 1000).toFixed(1)}K`
+                          }
+                          return numValue.toFixed(0)
+                        }
+                        
+                        if (numValue > 0 && numValue < 1 && numValue !== Math.floor(numValue)) {
+                          const percentage = numValue * 100
+                          if (percentage < 0.1) {
+                            return `${percentage.toFixed(2)}%`
+                          }
+                          return `${percentage.toFixed(1)}%`
+                        }
+                        
+                        if (absVal >= 1000000000) {
+                          return `${(numValue / 1000000000).toFixed(2)}B`
+                        }
+                        if (absVal >= 1000000) {
+                          return `${(numValue / 1000000).toFixed(2)}M`
+                        }
+                        if (absVal >= 1000) {
+                          return numValue.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                        }
+                        
+                        if (numValue !== Math.floor(numValue)) {
+                          if (absVal < 0.01) {
+                            return numValue.toFixed(4)
+                          }
+                          return numValue.toFixed(2)
+                        }
+                        return numValue.toString()
                       }
 
                       return (
@@ -1087,7 +1092,7 @@ export default function HeroDetailPage() {
                                 {matchStats.map(([key, value]) => (
                                   <div key={key} className="text-center p-6 border border-white/10 rounded-xl bg-black/20 hover:border-white/20 hover:bg-black/30 transition-all">
                                     <div className="text-4xl sm:text-5xl font-light mb-3 text-white leading-none">
-                                      {formatValue(value)}
+                                      {formatValue(value, key)}
                                     </div>
                                     <div className="text-xs text-gray-400 font-normal uppercase tracking-wider">
                                       {formatKey(key)}
@@ -1106,7 +1111,7 @@ export default function HeroDetailPage() {
                                 {combatStats.map(([key, value]) => (
                                   <div key={key} className="text-center p-6 border border-white/10 rounded-xl bg-black/20 hover:border-white/20 hover:bg-black/30 transition-all">
                                     <div className="text-4xl sm:text-5xl font-light mb-3 text-white leading-none">
-                                      {formatValue(value)}
+                                      {formatValue(value, key)}
                                     </div>
                                     <div className="text-xs text-gray-400 font-normal uppercase tracking-wider">
                                       {formatKey(key)}
@@ -1125,7 +1130,7 @@ export default function HeroDetailPage() {
                                 {performanceStats.map(([key, value]) => (
                                   <div key={key} className="text-center p-6 border border-white/10 rounded-xl bg-black/20 hover:border-white/20 hover:bg-black/30 transition-all">
                                     <div className="text-4xl sm:text-5xl font-light mb-3 text-white leading-none">
-                                      {formatValue(value)}
+                                      {formatValue(value, key)}
                                     </div>
                                     <div className="text-xs text-gray-400 font-normal uppercase tracking-wider">
                                       {formatKey(key)}
@@ -1144,7 +1149,7 @@ export default function HeroDetailPage() {
                                 {otherStats.map(([key, value]) => (
                                   <div key={key} className="text-center p-6 border border-white/10 rounded-xl bg-black/20 hover:border-white/20 hover:bg-black/30 transition-all">
                                     <div className="text-4xl sm:text-5xl font-light mb-3 text-white leading-none">
-                                      {formatValue(value)}
+                                      {formatValue(value, key)}
                                     </div>
                                     <div className="text-xs text-gray-400 font-normal uppercase tracking-wider">
                                       {formatKey(key)}
