@@ -9,27 +9,29 @@ const calculateRivalsDbScore = (stats: any): number => {
   let totalScore = 0
   
   const winRate = Number(stats.win_rate) || 0
-  totalScore += (winRate / 100) * 40
+  const winRatePercent = winRate > 1 ? winRate : winRate * 100
+  totalScore += Math.min(winRatePercent, 100) * 0.35
   
   const kda = Number(stats.kda) || 0
-  const normalizedKda = Math.min(kda / 2.0, 1)
-  totalScore += normalizedKda * 25
+  const kdaScore = Math.min(kda / 2.5, 1) * 25
+  totalScore += kdaScore
   
   const sessionHitRate = Number(stats.session_hit_rate) || 0
-  totalScore += (sessionHitRate / 100) * 15
+  const hitRatePercent = sessionHitRate > 1 ? sessionHitRate : sessionHitRate * 100
+  totalScore += Math.min(hitRatePercent, 100) * 0.15
   
   const kills = Number(stats.kills) || 0
   const assists = Number(stats.assists) || 0
   const matches = Number(stats.matches) || 1
   const eliminationsPerMatch = (kills + assists) / matches
-  const normalizedElims = Math.min(eliminationsPerMatch / 8, 1)
-  totalScore += normalizedElims * 15
+  const elimsScore = Math.min(eliminationsPerMatch / 10, 1) * 20
+  totalScore += elimsScore
   
   const avgScore = Number(stats.average_score) || 0
-  const normalizedAvgScore = Math.min(avgScore / 3000, 1)
-  totalScore += normalizedAvgScore * 5
+  const avgScoreNormalized = Math.min(avgScore / 4000, 1) * 5
+  totalScore += avgScoreNormalized
   
-  return totalScore
+  return Math.min(totalScore, 100)
 }
 
 export async function GET() {
