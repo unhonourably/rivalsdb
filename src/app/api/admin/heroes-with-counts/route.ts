@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAllHeroes } from '@/lib/heroes'
 import pool from '@/lib/mysql'
+import { RowDataPacket } from 'mysql2/promise'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,12 +12,12 @@ export async function GET() {
     const heroesWithCounts = await Promise.all(
       heroes.map(async (hero) => {
         try {
-          const [rows] = await pool.query<Array<{ total: number }>>(
+          const [rows] = await pool.query<RowDataPacket[]>(
             'SELECT COUNT(*) as total FROM hero_leaderboard WHERE hero_id = ?',
             [hero.id]
           )
           
-          const count = rows[0]?.total || 0
+          const count = (rows[0] as { total: number })?.total || 0
           
           return {
             id: hero.id,
