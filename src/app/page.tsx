@@ -755,7 +755,7 @@ export default function Home() {
                           <h3 className="text-2xl font-semibold text-white mb-1">{item.hero.name}</h3>
                           <div className="flex items-center gap-2 text-xs">
                             <div className="px-2 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300">
-                              Score: {item.stats.overall_score?.toFixed(1) || '-'}
+                              Score: {typeof item.stats.overall_score === 'number' ? item.stats.overall_score.toFixed(1) : '-'}
                             </div>
                           </div>
                         </div>
@@ -768,18 +768,18 @@ export default function Home() {
                         </div>
                         <div className="rounded-lg bg-black/40 border border-white/10 p-3 text-center">
                           <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">KDA</div>
-                          <div className="text-sm font-medium text-white">{item.stats.kda?.toFixed(2) || '-'}</div>
+                          <div className="text-sm font-medium text-white">{typeof item.stats.kda === 'number' ? item.stats.kda.toFixed(2) : '-'}</div>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 mb-6">
                         <div className="rounded-lg bg-black/40 border border-white/10 p-3 text-center">
                           <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">MVP Rate</div>
-                          <div className="text-sm font-medium text-white">{item.stats.mvp_rate?.toFixed(1) || '0'}%</div>
+                          <div className="text-sm font-medium text-white">{typeof item.stats.mvp_rate === 'number' ? item.stats.mvp_rate.toFixed(1) : '0'}%</div>
                         </div>
                         <div className="rounded-lg bg-black/40 border border-white/10 p-3 text-center">
                           <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">SVP Rate</div>
-                          <div className="text-sm font-medium text-white">{item.stats.svp_rate?.toFixed(1) || '0'}%</div>
+                          <div className="text-sm font-medium text-white">{typeof item.stats.svp_rate === 'number' ? item.stats.svp_rate.toFixed(1) : '0'}%</div>
                         </div>
                       </div>
 

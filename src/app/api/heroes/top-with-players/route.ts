@@ -23,30 +23,31 @@ export async function GET(request: NextRequest) {
     const validHeroes = heroesWithStats.filter((item): item is { hero: any; stats: any } => {
       if (item === null) return false
       if (!item.stats) return false
-      if (typeof item.stats.matches !== 'number') return false
-      return item.stats.matches > 100
+      const matches = Number(item.stats.matches)
+      if (isNaN(matches)) return false
+      return matches > 100
     })
 
     const calculateHeroScore = (stats: any): number => {
       let score = 0
       
-      const winRate = stats.win_rate || 0
+      const winRate = Number(stats.win_rate) || 0
       score += winRate * 40
       
-      const kda = stats.kda || 0
+      const kda = Number(stats.kda) || 0
       score += Math.min(kda * 5, 30)
       
       if (stats.matches && stats.mvps) {
-        const mvpRate = (stats.mvps / stats.matches) * 100
+        const mvpRate = (Number(stats.mvps) / Number(stats.matches)) * 100
         score += mvpRate * 15
       }
       
       if (stats.matches && stats.svps) {
-        const svpRate = (stats.svps / stats.matches) * 100
+        const svpRate = (Number(stats.svps) / Number(stats.matches)) * 100
         score += svpRate * 10
       }
       
-      const avgScore = stats.average_score || 0
+      const avgScore = Number(stats.average_score) || 0
       score += (avgScore / 100) * 5
       
       return score
@@ -84,8 +85,8 @@ export async function GET(request: NextRequest) {
         }
 
         const overallScore = calculateHeroScore(stats)
-        const mvpRate = stats.matches && stats.mvps ? (stats.mvps / stats.matches) * 100 : 0
-        const svpRate = stats.matches && stats.svps ? (stats.svps / stats.matches) * 100 : 0
+        const mvpRate = stats.matches && stats.mvps ? (Number(stats.mvps) / Number(stats.matches)) * 100 : 0
+        const svpRate = stats.matches && stats.svps ? (Number(stats.svps) / Number(stats.matches)) * 100 : 0
 
         return {
           hero: {
@@ -95,16 +96,16 @@ export async function GET(request: NextRequest) {
             image_url: hero.image_url
           },
           stats: {
-            matches: stats.matches,
-            wins: stats.wins,
-            losses: stats.losses,
-            win_rate: stats.win_rate,
-            kda: stats.kda,
-            mvps: stats.mvps,
-            svps: stats.svps,
+            matches: stats.matches ? Number(stats.matches) : undefined,
+            wins: stats.wins ? Number(stats.wins) : undefined,
+            losses: stats.losses ? Number(stats.losses) : undefined,
+            win_rate: stats.win_rate ? Number(stats.win_rate) : undefined,
+            kda: stats.kda ? Number(stats.kda) : undefined,
+            mvps: stats.mvps ? Number(stats.mvps) : undefined,
+            svps: stats.svps ? Number(stats.svps) : undefined,
             mvp_rate: mvpRate,
             svp_rate: svpRate,
-            average_score: stats.average_score,
+            average_score: stats.average_score ? Number(stats.average_score) : undefined,
             overall_score: overallScore
           },
           bestPlayer
