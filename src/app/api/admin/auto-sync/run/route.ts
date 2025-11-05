@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
           let totalCount = 0
           let currentIndex = 0
           let isComplete = false
-          const batchSize = 3
+          const batchSize = 5
           
           while (!isComplete) {
             const result = await syncFunction({ startIndex: currentIndex, batchSize })

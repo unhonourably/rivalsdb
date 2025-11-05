@@ -734,7 +734,7 @@ export default function AdminDashboardPage() {
       let totalCount = 0
       let currentIndex = 0
       let isComplete = false
-      const batchSize = 3
+      const batchSize = 5
       
       try {
         while (!isComplete) {

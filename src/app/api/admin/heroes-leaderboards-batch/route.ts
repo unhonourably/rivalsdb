@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { startIndex = 0, batchSize = 3 } = body
+    const { startIndex = 0, batchSize = 5 } = body
 
     const result = await refreshAllHeroLeaderboards({ 
       startIndex, 
