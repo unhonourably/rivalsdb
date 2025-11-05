@@ -200,7 +200,7 @@ const ensureCostumesTable = async () => {
   `)
 }
 
-const getHeroLeaderboardTableName = (heroId: string) => {
+export const getHeroLeaderboardTableName = (heroId: string) => {
   if (/^\d{4}$/.test(heroId)) return `hero_leaderboard_${heroId}`
   return 'hero_leaderboard'
 }

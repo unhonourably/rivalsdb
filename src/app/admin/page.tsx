@@ -420,8 +420,20 @@ function HeroesRankingsPanel() {
                   <div className="text-sm text-gray-400">{hero.role || '-'}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
-                  <div className="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30">
-                    <span className="text-emerald-300 font-bold">{hero.rivals_db_score?.toFixed(0) || '0'}</span>
+                  <div className={`inline-flex items-center px-3 py-1 rounded-full ${
+                    (hero.rivals_db_score || 0) >= 70
+                      ? 'bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30'
+                      : (hero.rivals_db_score || 0) >= 50
+                      ? 'bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-500/30'
+                      : 'bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-500/30'
+                  }`}>
+                    <span className={`font-bold ${
+                      (hero.rivals_db_score || 0) >= 70
+                        ? 'text-emerald-300'
+                        : (hero.rivals_db_score || 0) >= 50
+                        ? 'text-yellow-300'
+                        : 'text-red-300'
+                    }`}>{hero.rivals_db_score?.toFixed(0) || '0'}</span>
                     <span className="text-gray-500 text-xs ml-1">/100</span>
                   </div>
                 </td>

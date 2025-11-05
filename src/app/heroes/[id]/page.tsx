@@ -405,11 +405,23 @@ export default function HeroDetailPage() {
               </div>
 
               {!loadingStats && stats && (
-                <div className="mb-6 p-4 rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10">
+                <div className={`mb-6 p-4 rounded-xl border ${
+                  rivalsDbScore >= 70
+                    ? 'border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-green-500/10'
+                    : rivalsDbScore >= 50
+                    ? 'border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 to-amber-500/10'
+                    : 'border-red-500/30 bg-gradient-to-r from-red-500/10 to-orange-500/10'
+                }`}>
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-xs uppercase tracking-[0.25em] text-gray-400 mb-1">RivalsDB Score</div>
-                      <div className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
+                      <div className={`text-4xl font-bold text-transparent bg-clip-text ${
+                        rivalsDbScore >= 70
+                          ? 'bg-gradient-to-r from-emerald-400 to-green-400'
+                          : rivalsDbScore >= 50
+                          ? 'bg-gradient-to-r from-yellow-400 to-amber-400'
+                          : 'bg-gradient-to-r from-red-400 to-orange-400'
+                      }`}>
                         {rivalsDbScore.toFixed(0)}<span className="text-xl text-gray-500">/100</span>
                       </div>
                     </div>

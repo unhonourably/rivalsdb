@@ -753,7 +753,15 @@ export default function Home() {
                         <div className="flex-1">
                           <h3 className="text-2xl font-semibold text-white mb-1">{toTitleCase(item.hero.name)}</h3>
                           <div className="flex items-center gap-2 text-xs">
-                            <div className="px-3 py-1 rounded-full bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 text-emerald-300 font-semibold">
+                            <div className={`px-3 py-1 rounded-full font-semibold ${
+                              typeof item.stats.rivals_db_score === 'number'
+                                ? item.stats.rivals_db_score >= 70
+                                  ? 'bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30 text-emerald-300'
+                                  : item.stats.rivals_db_score >= 50
+                                  ? 'bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-500/30 text-yellow-300'
+                                  : 'bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-500/30 text-red-300'
+                                : 'bg-gray-500/20 border border-gray-500/30 text-gray-300'
+                            }`}>
                               RivalsDB Score: {typeof item.stats.rivals_db_score === 'number' ? item.stats.rivals_db_score.toFixed(0) : '-'}/100
                             </div>
                           </div>
