@@ -216,6 +216,239 @@ function LeaderboardPlayersPanel() {
     </div>
   )
 }
+
+function HeroesManagerPanel() {
+  const [heroes, setHeroes] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState<Record<string, boolean>>({})
+  const [success, setSuccess] = useState<Record<string, string | null>>({})
+
+  const fetchHeroes = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/admin/heroes-with-counts')
+      if (!response.ok) throw new Error('Failed to fetch heroes')
+      const data = await response.json()
+      setHeroes(data.heroes || [])
+    } catch (error) {
+      console.error('Error fetching heroes:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchHeroes()
+  }, [])
+
+  const handleSyncLeaderboard = async (heroId: string, heroName: string) => {
+    setSyncing(prev => ({ ...prev, [heroId]: true }))
+    setSuccess(prev => ({ ...prev, [heroId]: null }))
+    
+    try {
+      const response = await fetch('/api/admin/hero-leaderboard-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ heroId })
+      })
+      
+      if (!response.ok) throw new Error('Failed to sync leaderboard')
+      
+      const result = await response.json()
+      setSuccess(prev => ({ ...prev, [heroId]: `✅ Synced ${result.count || 0} entries` }))
+      
+      await fetchHeroes()
+      
+      setTimeout(() => {
+        setSuccess(prev => ({ ...prev, [heroId]: null }))
+      }, 5000)
+    } catch (error) {
+      setSuccess(prev => ({ ...prev, [heroId]: `❌ Failed to sync` }))
+    } finally {
+      setSyncing(prev => ({ ...prev, [heroId]: false }))
+    }
+  }
+
+  const toTitleCase = (str: string) => {
+    if (!str) return ''
+    return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-white">Loading heroes...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-medium text-white mb-2">Hero Leaderboard Manager</h1>
+        <p className="text-gray-400">
+          Manually sync individual hero leaderboards. Use this to update specific heroes without running a full batch sync.
+        </p>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {heroes.map((hero) => (
+          <div key={hero.id} className="border border-white/10 bg-white/[0.02] rounded-xl p-4">
+            <div className="flex items-center gap-3 mb-3">
+              {hero.image_url && (
+                <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-white/10 bg-black/40">
+                  <img
+                    src={hero.image_url.startsWith('http') ? hero.image_url : `https://marvelrivalsapi.com${hero.image_url}`}
+                    alt={hero.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <h3 className="text-white font-medium truncate">{toTitleCase(hero.name)}</h3>
+                <p className="text-xs text-gray-400">{hero.role || 'Unknown'}</p>
+              </div>
+            </div>
+            
+            <div className="mb-3 px-3 py-2 rounded-lg bg-black/40 border border-white/10">
+              <div className="text-xs text-gray-400 mb-1">Current Entries</div>
+              <div className="text-lg font-bold text-white">
+                {hero.leaderboard_count?.toLocaleString() || '0'}
+              </div>
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => handleSyncLeaderboard(hero.id, hero.name)}
+              disabled={syncing[hero.id]}
+              className="w-full px-3 py-2 rounded-lg bg-white text-black text-sm font-semibold hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {syncing[hero.id] ? 'Syncing...' : 'Sync Leaderboard'}
+            </button>
+            
+            {success[hero.id] && (
+              <div className="mt-2 text-xs text-center text-gray-300">
+                {success[hero.id]}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function HeroesRankingsPanel() {
+  const [heroes, setHeroes] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchRankings = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch('/api/admin/heroes-rankings')
+        if (!response.ok) throw new Error('Failed to fetch rankings')
+        const data = await response.json()
+        setHeroes(data.heroes || [])
+      } catch (error) {
+        console.error('Error fetching hero rankings:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchRankings()
+  }, [])
+
+  const toTitleCase = (str: string) => {
+    if (!str) return ''
+    return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-white">Loading rankings...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-medium text-white mb-2">Hero Rankings by RivalsDB Score</h1>
+        <p className="text-gray-400">
+          All heroes ranked by their comprehensive RivalsDB Score from highest to lowest.
+        </p>
+      </div>
+      
+      <div className="border border-white/10 bg-white/[0.02] rounded-xl overflow-hidden">
+        <table className="w-full">
+          <thead className="border-b border-white/10">
+            <tr className="text-left">
+              <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-wider">Rank</th>
+              <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-wider">Hero</th>
+              <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-wider">Role</th>
+              <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-wider text-right">RivalsDB Score</th>
+              <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-wider text-right">Win Rate</th>
+              <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-wider text-right">KDA</th>
+              <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-wider text-right">Matches</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {heroes.map((hero, index) => (
+              <tr key={hero.hero_id} className="hover:bg-white/[0.02] transition">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold text-gray-600">#{index + 1}</span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center gap-3">
+                    {hero.image_url && (
+                      <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-white/10 bg-black/40">
+                        <img
+                          src={hero.image_url.startsWith('http') ? hero.image_url : `https://marvelrivalsapi.com${hero.image_url}`}
+                          alt={hero.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="text-white font-medium">{toTitleCase(hero.name)}</div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-400">{hero.role || '-'}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right">
+                  <div className="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30">
+                    <span className="text-emerald-300 font-bold">{hero.rivals_db_score?.toFixed(0) || '0'}</span>
+                    <span className="text-gray-500 text-xs ml-1">/100</span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-white">
+                  {hero.win_rate ? `${hero.win_rate.toFixed(1)}%` : '-'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-white">
+                  {hero.kda ? hero.kda.toFixed(2) : '-'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-white">
+                  {hero.matches?.toLocaleString() || '-'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        
+        {heroes.length === 0 && (
+          <div className="py-20 text-center text-gray-400">
+            No hero data available. Sync hero stats first.
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 import { refreshAchievements } from './achievements/actions'
 import { refreshItems } from './items/actions'
 import { refreshBattlePass } from './battlepass/actions'
@@ -234,7 +467,7 @@ import {
 
 type SyncStatus = 'idle' | 'pending' | 'success' | 'error'
 
-type PanelKey = 'overview' | 'auto-sync' | 'achievements' | 'items' | 'battlepass' | 'patchnotes' | 'balances' | 'devdiaries' | 'gameversions' | 'leaderboard' | 'leaderboard-players' | 'heroes'
+type PanelKey = 'overview' | 'auto-sync' | 'achievements' | 'items' | 'battlepass' | 'patchnotes' | 'balances' | 'devdiaries' | 'gameversions' | 'leaderboard' | 'leaderboard-players' | 'heroes' | 'heroes-manager' | 'heroes-rankings'
 
 interface SyncState {
   status: SyncStatus
@@ -1533,6 +1766,10 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         )
+      case 'heroes-manager':
+        return <HeroesManagerPanel />
+      case 'heroes-rankings':
+        return <HeroesRankingsPanel />
       default:
         return (
           <div className="space-y-8">
@@ -1583,6 +1820,8 @@ export default function AdminDashboardPage() {
     { key: 'auto-sync', label: 'Auto Syncs', icon: '⏰' },
     { key: 'leaderboard-players', label: 'LB Players', icon: '👥' },
     { key: 'heroes', label: 'Heroes', icon: '🦸' },
+    { key: 'heroes-manager', label: 'Hero Manager', icon: '⚙️' },
+    { key: 'heroes-rankings', label: 'Hero Rankings', icon: '🏆' },
   ]
 
   if (isCheckingAuth) {
