@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { changeAdminPassword } from '@/lib/adminAuth'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const { oldPassword, newPassword } = await request.json()

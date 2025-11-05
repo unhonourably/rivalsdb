@@ -17,6 +17,8 @@ import {
 } from '@/app/admin/heroes/actions'
 import { refreshPlayerStats } from '@/app/admin/players/actions'
 
+export const dynamic = 'force-dynamic'
+
 const syncFunctions: Record<string, (config?: any) => Promise<any>> = {
   'achievements': refreshAchievements,
   'items': refreshItems,

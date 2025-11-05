@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchPlayerStatsFromApi, savePlayer } from '@/lib/players'
 
+export const dynamic = 'force-dynamic'
+
 const API_KEY = process.env.MARVEL_RIVALS_API_KEY || '188d3cd06e7db493dbd00811774d009528e8516c560a6b3e2751c2e411c40f9f'
 
 export async function POST(request: NextRequest) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { setCacheMeta } from '@/lib/cacheMeta'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const { cacheType, count } = await request.json()

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getLeaderboardPage } from '@/lib/leaderboard'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const result = await getLeaderboardPage(1, 10000)
