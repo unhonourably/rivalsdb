@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAllHeroes } from '@/lib/heroes'
-import { runQuery } from '@/lib/mysql'
+import pool from '@/lib/mysql'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,12 +11,12 @@ export async function GET() {
     const heroesWithCounts = await Promise.all(
       heroes.map(async (hero) => {
         try {
-          const countResult = await runQuery<Array<{ total: number }>>(
+          const [rows] = await pool.query<Array<{ total: number }>>(
             'SELECT COUNT(*) as total FROM hero_leaderboard WHERE hero_id = ?',
             [hero.id]
           )
           
-          const count = countResult[0]?.total || 0
+          const count = rows[0]?.total || 0
           
           return {
             id: hero.id,
@@ -26,6 +26,7 @@ export async function GET() {
             leaderboard_count: count
           }
         } catch (error) {
+          console.error(`Error counting leaderboard for hero ${hero.id}:`, error)
           return {
             id: hero.id,
             name: hero.name,
