@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       totalScore += (winRate / 100) * 40
       
       const kda = Number(stats.kda) || 0
-      const normalizedKda = Math.min(kda / 6, 1)
+      const normalizedKda = Math.min(kda / 3.5, 1)
       totalScore += normalizedKda * 25
       
       const sessionHitRate = Number(stats.session_hit_rate) || 0
@@ -45,11 +45,11 @@ export async function GET(request: NextRequest) {
       const assists = Number(stats.assists) || 0
       const matches = Number(stats.matches) || 1
       const eliminationsPerMatch = (kills + assists) / matches
-      const normalizedElims = Math.min(eliminationsPerMatch / 20, 1)
+      const normalizedElims = Math.min(eliminationsPerMatch / 12, 1)
       totalScore += normalizedElims * 15
       
       const avgScore = Number(stats.average_score) || 0
-      const normalizedAvgScore = Math.min(avgScore / 10000, 1)
+      const normalizedAvgScore = Math.min(avgScore / 5000, 1)
       totalScore += normalizedAvgScore * 5
       
       return totalScore

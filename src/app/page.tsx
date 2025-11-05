@@ -746,12 +746,12 @@ export default function Home() {
                         <div className="relative w-20 h-20 rounded-2xl overflow-hidden border border-white/15 bg-black/40">
                           <SmartImage 
                             paths={getAssetCandidates(item.hero.image_url)} 
-                            alt={item.hero.name} 
+                            alt={toTitleCase(item.hero.name)} 
                             className="w-full h-full object-cover" 
                           />
                         </div>
                         <div className="flex-1">
-                          <h3 className="text-2xl font-semibold text-white mb-1">{item.hero.name}</h3>
+                          <h3 className="text-2xl font-semibold text-white mb-1">{toTitleCase(item.hero.name)}</h3>
                           <div className="flex items-center gap-2 text-xs">
                             <div className="px-3 py-1 rounded-full bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 text-emerald-300 font-semibold">
                               RivalsDB Score: {typeof item.stats.rivals_db_score === 'number' ? item.stats.rivals_db_score.toFixed(0) : '-'}/100
@@ -812,13 +812,13 @@ export default function Home() {
                               <div className="relative w-12 h-12 rounded-full overflow-hidden border border-white/15 bg-black/40">
                                 <SmartImage 
                                   paths={getAssetCandidates(item.bestPlayer.icon)} 
-                                  alt={item.bestPlayer.name || 'Player'} 
+                                  alt={toTitleCase(item.bestPlayer.name) || 'Player'} 
                                   className="w-full h-full object-cover" 
                                 />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="text-white font-medium truncate group-hover/player:text-emerald-400 transition-colors">
-                                  {item.bestPlayer.name || 'Unknown'}
+                                  {toTitleCase(item.bestPlayer.name) || 'Unknown'}
                                 </div>
                                 <div className="text-xs text-gray-400">
                                   Rank #{item.bestPlayer.rank} • {formatNumber(item.bestPlayer.wins)} wins
