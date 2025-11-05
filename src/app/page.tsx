@@ -67,12 +67,11 @@ interface BestHero {
     losses?: number
     win_rate?: number
     kda?: number
-    mvps?: number
-    svps?: number
-    mvp_rate?: number
-    svp_rate?: number
+    total_hero_damage?: number
+    total_damage_taken?: number
+    total_hero_heal?: number
     average_score?: number
-    overall_score?: number
+    rivals_db_score?: number
   }
   bestPlayer: {
     name?: string
@@ -713,7 +712,7 @@ export default function Home() {
             <div className="text-center mb-12 animate-fade-in-up" style={{ animationDelay: '1.6s' }}>
               <h2 className="text-2xl sm:text-3xl font-light mb-4 text-white">Best Heroes & Their Champions</h2>
               <p className="text-gray-500 text-sm max-w-2xl mx-auto">
-                Ranked by comprehensive analysis: win rate, KDA, MVP/SVP rates, and average score. Each hero shown with their top-performing player.
+                Ranked by RivalsDB Score (0-100): comprehensive analysis of win rate, KDA, accuracy (hit rate), eliminations per match, and average score. Each hero shown with their top-performing player.
               </p>
             </div>
 
@@ -754,8 +753,8 @@ export default function Home() {
                         <div className="flex-1">
                           <h3 className="text-2xl font-semibold text-white mb-1">{item.hero.name}</h3>
                           <div className="flex items-center gap-2 text-xs">
-                            <div className="px-2 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300">
-                              Score: {typeof item.stats.overall_score === 'number' ? item.stats.overall_score.toFixed(1) : '-'}
+                            <div className="px-3 py-1 rounded-full bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 text-emerald-300 font-semibold">
+                              RivalsDB Score: {typeof item.stats.rivals_db_score === 'number' ? item.stats.rivals_db_score.toFixed(0) : '-'}/100
                             </div>
                           </div>
                         </div>
@@ -773,14 +772,33 @@ export default function Home() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 mb-6">
-                        <div className="rounded-lg bg-black/40 border border-white/10 p-3 text-center">
-                          <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">MVP Rate</div>
-                          <div className="text-sm font-medium text-white">{typeof item.stats.mvp_rate === 'number' ? item.stats.mvp_rate.toFixed(1) : '0'}%</div>
-                        </div>
-                        <div className="rounded-lg bg-black/40 border border-white/10 p-3 text-center">
-                          <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">SVP Rate</div>
-                          <div className="text-sm font-medium text-white">{typeof item.stats.svp_rate === 'number' ? item.stats.svp_rate.toFixed(1) : '0'}%</div>
-                        </div>
+                        {item.hero.role?.toLowerCase() === 'duelist' ? (
+                          <div className="rounded-lg bg-black/40 border border-white/10 p-3 text-center col-span-2">
+                            <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">Total Damage</div>
+                            <div className="text-sm font-medium text-white">{formatNumber(item.stats.total_hero_damage)}</div>
+                          </div>
+                        ) : item.hero.role?.toLowerCase() === 'vanguard' ? (
+                          <div className="rounded-lg bg-black/40 border border-white/10 p-3 text-center col-span-2">
+                            <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">Total Damage Taken</div>
+                            <div className="text-sm font-medium text-white">{formatNumber(item.stats.total_damage_taken)}</div>
+                          </div>
+                        ) : item.hero.role?.toLowerCase() === 'strategist' ? (
+                          <div className="rounded-lg bg-black/40 border border-white/10 p-3 text-center col-span-2">
+                            <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">Total Healing</div>
+                            <div className="text-sm font-medium text-white">{formatNumber(item.stats.total_hero_heal)}</div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="rounded-lg bg-black/40 border border-white/10 p-3 text-center">
+                              <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">Matches</div>
+                              <div className="text-sm font-medium text-white">{formatNumber(item.stats.matches)}</div>
+                            </div>
+                            <div className="rounded-lg bg-black/40 border border-white/10 p-3 text-center">
+                              <div className="text-gray-500 uppercase tracking-[0.2em] mb-1 text-[10px]">Wins</div>
+                              <div className="text-sm font-medium text-white">{formatNumber(item.stats.wins)}</div>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       <div className="border-t border-white/10 pt-4">
@@ -845,4 +863,4 @@ export default function Home() {
       <Footer />
     </div>
   )
-}
+} 

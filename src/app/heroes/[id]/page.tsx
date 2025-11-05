@@ -265,6 +265,37 @@ export default function HeroDetailPage() {
     }
   }
 
+  const calculateRivalsDbScore = (stats: HeroStats | null): number => {
+    if (!stats) return 0
+    
+    let totalScore = 0
+    
+    const winRate = Number(stats.win_rate) || 0
+    totalScore += (winRate / 100) * 40
+    
+    const kda = Number(stats.kda) || 0
+    const normalizedKda = Math.min(kda / 6, 1)
+    totalScore += normalizedKda * 25
+    
+    const sessionHitRate = Number(stats.session_hit_rate) || 0
+    totalScore += (sessionHitRate / 100) * 15
+    
+    const kills = Number(stats.kills) || 0
+    const assists = Number(stats.assists) || 0
+    const matches = Number(stats.matches) || 1
+    const eliminationsPerMatch = (kills + assists) / matches
+    const normalizedElims = Math.min(eliminationsPerMatch / 20, 1)
+    totalScore += normalizedElims * 15
+    
+    const avgScore = Number(stats.average_score) || 0
+    const normalizedAvgScore = Math.min(avgScore / 10000, 1)
+    totalScore += normalizedAvgScore * 5
+    
+    return totalScore
+  }
+
+  const rivalsDbScore = calculateRivalsDbScore(stats)
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
@@ -370,6 +401,23 @@ export default function HeroDetailPage() {
                   </div>
                 )}
               </div>
+
+              {!loadingStats && stats && (
+                <div className="mb-6 p-4 rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.25em] text-gray-400 mb-1">RivalsDB Score</div>
+                      <div className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
+                        {rivalsDbScore.toFixed(0)}<span className="text-xl text-gray-500">/100</span>
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-400 text-right">
+                      <div>Based on comprehensive</div>
+                      <div>performance analysis</div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {hero.bio && (
                 <div className="mb-6">

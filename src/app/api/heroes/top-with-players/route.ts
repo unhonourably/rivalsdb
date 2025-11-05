@@ -29,28 +29,30 @@ export async function GET(request: NextRequest) {
     })
 
     const calculateHeroScore = (stats: any): number => {
-      let score = 0
+      let totalScore = 0
       
       const winRate = Number(stats.win_rate) || 0
-      score += winRate * 40
+      totalScore += (winRate / 100) * 40
       
       const kda = Number(stats.kda) || 0
-      score += Math.min(kda * 5, 30)
+      const normalizedKda = Math.min(kda / 6, 1)
+      totalScore += normalizedKda * 25
       
-      if (stats.matches && stats.mvps) {
-        const mvpRate = (Number(stats.mvps) / Number(stats.matches)) * 100
-        score += mvpRate * 15
-      }
+      const sessionHitRate = Number(stats.session_hit_rate) || 0
+      totalScore += (sessionHitRate / 100) * 15
       
-      if (stats.matches && stats.svps) {
-        const svpRate = (Number(stats.svps) / Number(stats.matches)) * 100
-        score += svpRate * 10
-      }
+      const kills = Number(stats.kills) || 0
+      const assists = Number(stats.assists) || 0
+      const matches = Number(stats.matches) || 1
+      const eliminationsPerMatch = (kills + assists) / matches
+      const normalizedElims = Math.min(eliminationsPerMatch / 20, 1)
+      totalScore += normalizedElims * 15
       
       const avgScore = Number(stats.average_score) || 0
-      score += (avgScore / 100) * 5
+      const normalizedAvgScore = Math.min(avgScore / 10000, 1)
+      totalScore += normalizedAvgScore * 5
       
-      return score
+      return totalScore
     }
 
     validHeroes.sort((a, b) => {
@@ -85,8 +87,16 @@ export async function GET(request: NextRequest) {
         }
 
         const overallScore = calculateHeroScore(stats)
-        const mvpRate = stats.matches && stats.mvps ? (Number(stats.mvps) / Number(stats.matches)) * 100 : 0
-        const svpRate = stats.matches && stats.svps ? (Number(stats.svps) / Number(stats.matches)) * 100 : 0
+        
+        const parseStatValue = (val: any): number => {
+          if (!val) return 0
+          const str = String(val).replace(/[^0-9.]/g, '')
+          return Number(str) || 0
+        }
+
+        const totalDamage = parseStatValue(stats.total_hero_damage)
+        const totalDamageTaken = parseStatValue(stats.total_damage_taken)
+        const totalHealing = parseStatValue(stats.total_hero_heal)
 
         return {
           hero: {
@@ -101,12 +111,14 @@ export async function GET(request: NextRequest) {
             losses: stats.losses ? Number(stats.losses) : undefined,
             win_rate: stats.win_rate ? Number(stats.win_rate) : undefined,
             kda: stats.kda ? Number(stats.kda) : undefined,
-            mvps: stats.mvps ? Number(stats.mvps) : undefined,
-            svps: stats.svps ? Number(stats.svps) : undefined,
-            mvp_rate: mvpRate,
-            svp_rate: svpRate,
+            kills: stats.kills ? Number(stats.kills) : undefined,
+            assists: stats.assists ? Number(stats.assists) : undefined,
+            session_hit_rate: stats.session_hit_rate ? Number(stats.session_hit_rate) : undefined,
+            total_hero_damage: totalDamage,
+            total_damage_taken: totalDamageTaken,
+            total_hero_heal: totalHealing,
             average_score: stats.average_score ? Number(stats.average_score) : undefined,
-            overall_score: overallScore
+            rivals_db_score: overallScore
           },
           bestPlayer
         }
