@@ -730,16 +730,45 @@ export default function AdminDashboardPage() {
   const handleHeroLeaderboardsSync = () => {
     startHeroLeaderboardsTransition(async () => {
       setHeroLeaderboardsState(prev => ({ ...prev, status: 'pending', message: null, error: null }))
+      
+      let totalCount = 0
+      let currentIndex = 0
+      let isComplete = false
+      const batchSize = 3
+      
       try {
-        const result = await refreshAllHeroLeaderboards()
+        while (!isComplete) {
+          const response = await fetch('/api/admin/heroes-leaderboards-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ startIndex: currentIndex, batchSize })
+          })
+          
+          if (!response.ok) {
+            throw new Error('Failed to sync batch')
+          }
+          
+          const result = await response.json()
+          totalCount += result.count
+          currentIndex = result.nextIndex
+          isComplete = result.isComplete
+          
+          setHeroLeaderboardsState(prev => ({
+            ...prev,
+            message: `Processing: ${result.processed}/${result.total} heroes...`
+          }))
+          
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+        
         const now = new Date()
         const timestamp = now.toISOString()
         setHeroLeaderboardsState({
           status: 'success',
-          message: `Synced ${result.count} leaderboard entries`,
+          message: `Synced ${totalCount} leaderboard entries`,
           error: null,
           lastSynced: timestamp,
-          count: result.count
+          count: totalCount
         })
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to sync hero leaderboards.'

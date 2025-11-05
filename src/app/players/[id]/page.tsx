@@ -847,7 +847,7 @@ export default function PlayerDetailPage() {
       }
 
       setUpdateStatus('success')
-      setUpdateMessage(resultMessage || 'Update request queued successfully. Please wait a few minutes and refresh the page to see updated stats.')
+      setUpdateMessage(resultMessage || 'Update request queued successfully. Fetching fresh data...')
       
       setTimeout(async () => {
         try {
@@ -857,6 +857,7 @@ export default function PlayerDetailPage() {
             ? [`${API_BASE}/player/${playerId}`, `${API_BASE_V2}/player/${playerId}`]
             : [`${API_BASE_V2}/player/${playerId}`, `${API_BASE}/player/${playerId}`]
 
+          let freshData: any = null
           for (const endpoint of endpointOrder) {
             try {
               let fetchResponse = await fetch(endpoint, {
@@ -870,17 +871,40 @@ export default function PlayerDetailPage() {
               }
 
               if (fetchResponse.ok) {
-                const data = await fetchResponse.json()
-                setUpdatedStats(data)
-                setPlayerData(mergePlayerPayload(data))
+                freshData = await fetchResponse.json()
                 break
               }
             } catch (e) {
               continue
             }
           }
+
+          if (freshData) {
+            const saveResponse = await fetch(`/api/players/${playerId}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ fullProfile: freshData })
+            })
+
+            if (saveResponse.ok) {
+              setPlayerData(mergePlayerPayload(freshData))
+              setUpdatedStats(freshData)
+              setUpdateMessage('Stats updated and saved to database!')
+              
+              setTimeout(() => {
+                window.location.reload()
+              }, 1500)
+            } else {
+              setPlayerData(mergePlayerPayload(freshData))
+              setUpdatedStats(freshData)
+              setUpdateMessage('Stats updated but failed to save to database. Please click "Push to DB" manually.')
+            }
+          }
         } catch (e) {
           console.error('Failed to fetch updated stats:', e)
+          setUpdateMessage('Update queued but failed to fetch fresh data. Please refresh in a few minutes.')
         }
       }, 5000)
     } catch (err) {

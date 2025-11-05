@@ -115,12 +115,17 @@ export async function refreshAllHeroCostumes() {
   return { count: costumeCount }
 }
 
-export async function refreshAllHeroLeaderboards() {
+export async function refreshAllHeroLeaderboards(batchConfig?: { batchSize?: number; startIndex?: number }) {
   const heroes = await fetchHeroesFromApi()
   const platforms = ['pc', 'ps', 'xbox']
   let leaderboardCount = 0
   
-  for (const hero of heroes) {
+  const batchSize = batchConfig?.batchSize || 5
+  const startIndex = batchConfig?.startIndex || 0
+  const endIndex = Math.min(startIndex + batchSize, heroes.length)
+  const batchHeroes = heroes.slice(startIndex, endIndex)
+  
+  for (const hero of batchHeroes) {
     for (const platform of platforms) {
       try {
         const leaderboard = await fetchHeroLeaderboardFromApi(hero.id, platform)
@@ -132,7 +137,17 @@ export async function refreshAllHeroLeaderboards() {
     }
   }
   
-  await setCacheMeta('heroes_leaderboards', new Date(), leaderboardCount)
-  return { count: leaderboardCount }
+  const isComplete = endIndex >= heroes.length
+  if (isComplete) {
+    await setCacheMeta('heroes_leaderboards', new Date(), leaderboardCount)
+  }
+  
+  return { 
+    count: leaderboardCount,
+    processed: endIndex,
+    total: heroes.length,
+    isComplete,
+    nextIndex: isComplete ? 0 : endIndex
+  }
 }
 

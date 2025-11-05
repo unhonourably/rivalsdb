@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     }
 
     const dueSyncs = await getDueSyncs()
-    const results: Array<{ cache_type: string; success: boolean; error?: string }> = []
+    const results: Array<{ cache_type: string; success: boolean; error?: string; count?: number }> = []
 
     for (const config of dueSyncs) {
       try {
@@ -54,14 +54,35 @@ export async function GET(request: NextRequest) {
           continue
         }
 
-        const batchConfig = config.batch_size && config.batch_delay ? {
-          batchSize: config.batch_size,
-          delayBetweenBatches: config.batch_delay
-        } : undefined
-        
-        await syncFunction(batchConfig)
-        await updateLastAutoSynced(config.cache_type)
-        results.push({ cache_type: config.cache_type, success: true })
+        if (config.cache_type === 'heroes_leaderboards') {
+          let totalCount = 0
+          let currentIndex = 0
+          let isComplete = false
+          const batchSize = 3
+          
+          while (!isComplete) {
+            const result = await syncFunction({ startIndex: currentIndex, batchSize })
+            totalCount += result.count
+            currentIndex = result.nextIndex
+            isComplete = result.isComplete
+            
+            if (!isComplete) {
+              await new Promise(resolve => setTimeout(resolve, 2000))
+            }
+          }
+          
+          await updateLastAutoSynced(config.cache_type)
+          results.push({ cache_type: config.cache_type, success: true, count: totalCount })
+        } else {
+          const batchConfig = config.batch_size && config.batch_delay ? {
+            batchSize: config.batch_size,
+            delayBetweenBatches: config.batch_delay
+          } : undefined
+          
+          await syncFunction(batchConfig)
+          await updateLastAutoSynced(config.cache_type)
+          results.push({ cache_type: config.cache_type, success: true })
+        }
       } catch (error) {
         console.error(`Error syncing ${config.cache_type}:`, error)
         results.push({
