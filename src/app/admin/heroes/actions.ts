@@ -138,9 +138,6 @@ export async function refreshAllHeroLeaderboards(batchConfig?: { batchSize?: num
   }
   
   const isComplete = endIndex >= heroes.length
-  if (isComplete) {
-    await setCacheMeta('heroes_leaderboards', new Date(), leaderboardCount)
-  }
   
   return { 
     count: leaderboardCount,

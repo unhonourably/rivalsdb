@@ -761,6 +761,15 @@ export default function AdminDashboardPage() {
           await new Promise(resolve => setTimeout(resolve, 1000))
         }
         
+        await fetch('/api/cache-meta', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            cacheType: 'heroes_leaderboards',
+            count: totalCount
+          })
+        })
+        
         const now = new Date()
         const timestamp = now.toISOString()
         setHeroLeaderboardsState({

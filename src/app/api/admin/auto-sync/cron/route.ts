@@ -71,6 +71,8 @@ export async function GET(request: NextRequest) {
             }
           }
           
+          const { setCacheMeta } = await import('@/lib/cacheMeta')
+          await setCacheMeta('heroes_leaderboards', new Date(), totalCount)
           await updateLastAutoSynced(config.cache_type)
           results.push({ cache_type: config.cache_type, success: true, count: totalCount })
         } else {
