@@ -12,7 +12,10 @@ export async function POST(request: NextRequest) {
     }
 
     const stats = await fetchHeroStatsFromApi(heroId)
-    await saveHeroStats(heroId, stats)
+    if (!stats) {
+      return NextResponse.json({ error: 'Failed to fetch hero stats from API' }, { status: 404 })
+    }
+    await saveHeroStats(stats)
 
     return NextResponse.json({ success: true })
   } catch (error) {
