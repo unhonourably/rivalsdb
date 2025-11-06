@@ -445,8 +445,19 @@ export default function Home() {
             </div>
 
             <div className="text-center mb-16">
-              <p className="text-xl sm:text-2xl md:text-3xl text-gray-400 max-w-3xl mx-auto leading-relaxed animate-fade-in-up relative z-10" style={{ animationDelay: '0.2s' }}>
-                The internet's biggest collection of information about Marvel Rivals. Stats, Data, Patch Notes, and more.
+              <p className="text-xl sm:text-2xl md:text-3xl max-w-4xl mx-auto leading-relaxed animate-fade-in-up relative z-10 font-medium" style={{ fontFamily: 'var(--font-fredoka)', animationDelay: '0.2s' }}>
+                <span className="text-white">Track </span>
+                <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">hero stats</span>
+                <span className="text-white">, check </span>
+                <span className="bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">leaderboards</span>
+                <span className="text-white">, analyze </span>
+                <span className="bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent">player profiles</span>
+                <span className="text-white">, and stay ahead with </span>
+                <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">fast updates</span>
+                <span className="text-white">.</span>
+              </p>
+              <p className="text-base sm:text-lg text-gray-500 max-w-2xl mx-auto mt-4 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+                Your ultimate companion for Marvel Rivals
               </p>
             </div>
 
