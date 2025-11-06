@@ -428,6 +428,8 @@ function HeroStatsManagerPanel() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState<Record<string, boolean>>({})
   const [success, setSuccess] = useState<Record<string, string | null>>({})
+  const [isRefreshingAll, setIsRefreshingAll] = useState(false)
+  const [refreshProgress, setRefreshProgress] = useState<string | null>(null)
 
   const fetchHeroes = async () => {
     try {
@@ -472,6 +474,50 @@ function HeroStatsManagerPanel() {
     }
   }
 
+  const handleRefreshAll = async () => {
+    if (heroes.length === 0) {
+      setRefreshProgress('No heroes found')
+      setTimeout(() => setRefreshProgress(null), 3000)
+      return
+    }
+    
+    setIsRefreshingAll(true)
+    setRefreshProgress(`Syncing 0/${heroes.length} heroes...`)
+    
+    let successCount = 0
+    let failCount = 0
+    
+    for (let i = 0; i < heroes.length; i++) {
+      const hero = heroes[i]
+      setRefreshProgress(`Syncing ${i + 1}/${heroes.length}: ${hero.name}...`)
+      
+      try {
+        const response = await fetch('/api/admin/hero-stats-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ heroId: hero.id })
+        })
+        
+        if (response.ok) {
+          successCount++
+        } else {
+          failCount++
+        }
+      } catch (error) {
+        console.error(`Failed to sync hero ${hero.id}:`, error)
+        failCount++
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+    
+    setRefreshProgress(`✅ Completed! Synced ${successCount}/${heroes.length} heroes${failCount > 0 ? ` (${failCount} failed)` : ''}`)
+    setTimeout(() => {
+      setRefreshProgress(null)
+      setIsRefreshingAll(false)
+    }, 5000)
+  }
+
   const toTitleCase = (str: string) => {
     if (!str) return ''
     return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
@@ -492,6 +538,30 @@ function HeroStatsManagerPanel() {
         <p className="text-gray-400">
           Manually sync individual hero stats. Use this to update specific hero statistics without running a full batch sync.
         </p>
+      </div>
+      
+      <div className="border border-white/10 bg-white/[0.02] rounded-xl p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-white font-medium mb-1">Refresh All Hero Stats</h3>
+            <p className="text-sm text-gray-400">
+              Sync stats for all {heroes.length} heroes • Runs one by one
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleRefreshAll}
+            disabled={isRefreshingAll}
+            className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-semibold hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRefreshingAll ? 'Refreshing...' : 'Refresh All'}
+          </button>
+        </div>
+        {refreshProgress && (
+          <div className="mt-3 text-sm text-gray-300 border-t border-white/10 pt-3">
+            {refreshProgress}
+          </div>
+        )}
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
