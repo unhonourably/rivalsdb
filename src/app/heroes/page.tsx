@@ -169,8 +169,8 @@ export default function HeroesPage() {
         <section className="px-6 lg:px-8 max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-12">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-light mb-4 tracking-tight text-center">
-              <span className="bubble-text red-glint" data-text="Heroes">Heroes</span>
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-semibold mb-4 tracking-tight text-center bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>
+              Heroes
             </h1>
             <p className="text-gray-400 text-center max-w-2xl mx-auto mb-8">
               Explore all available heroes in Marvel Rivals

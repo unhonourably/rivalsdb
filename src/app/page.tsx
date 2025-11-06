@@ -512,7 +512,7 @@ export default function Home() {
         <section className="py-24 px-6 lg:px-8 border-t border-white/5">
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-12 animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
-              <h2 className="text-2xl sm:text-3xl font-light mb-4 text-white">Hero Showcase</h2>
+              <h2 className="text-3xl sm:text-4xl font-semibold mb-4 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Hero Showcase</h2>
               <p className="text-gray-500 text-sm max-w-2xl mx-auto">
                 Top heroes ranked by performance metrics from the database.
               </p>
@@ -646,7 +646,7 @@ export default function Home() {
         <section className="py-24 px-6 lg:px-8 border-t border-white/5">
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-12 animate-fade-in-up" style={{ animationDelay: '1.0s' }}>
-              <h2 className="text-2xl sm:text-3xl font-light mb-4 text-white">Player Showcase</h2>
+              <h2 className="text-3xl sm:text-4xl font-semibold mb-4 bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Player Showcase</h2>
               <p className="text-gray-500 text-sm max-w-2xl mx-auto">
                 Top players ranked by performance metrics from the global leaderboard.
               </p>
@@ -780,7 +780,7 @@ export default function Home() {
         <section className="py-24 px-6 lg:px-8 border-t border-white/5">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-12 animate-fade-in-up" style={{ animationDelay: '1.6s' }}>
-              <h2 className="text-2xl sm:text-3xl font-light mb-4 text-white">Best Heroes & Their Champions</h2>
+              <h2 className="text-3xl sm:text-4xl font-semibold mb-4 bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Best Heroes & Their Champions</h2>
               <p className="text-gray-500 text-sm max-w-2xl mx-auto">
                 Ranked by RivalsDB Score (0-100): comprehensive analysis of win rate, KDA, accuracy (hit rate), eliminations per match, and average score. Each hero shown with their top-performing player.
               </p>
@@ -952,7 +952,7 @@ export default function Home() {
         <section className="py-24 px-6 lg:px-8 border-t border-white/5">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-12">
-              <h2 className="text-2xl sm:text-3xl font-light mb-4 text-white">Latest Updates</h2>
+              <h2 className="text-3xl sm:text-4xl font-semibold mb-4 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Latest Updates</h2>
               <p className="text-gray-500 text-sm max-w-2xl mx-auto">
                 Stay up to date with the latest patch notes, developer diaries, and balance changes
               </p>
@@ -1011,7 +1011,7 @@ export default function Home() {
         <section className="py-24 px-6 lg:px-8 border-t border-white/5">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-12">
-              <h2 className="text-2xl sm:text-3xl font-light mb-4 text-white">Current Battle Pass</h2>
+              <h2 className="text-3xl sm:text-4xl font-semibold mb-4 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Current Battle Pass</h2>
               {battlePassSeasonName && (
                 <p className="text-white/80 mb-2 text-sm uppercase tracking-[0.3em]">
                   {battlePassSeasonName}

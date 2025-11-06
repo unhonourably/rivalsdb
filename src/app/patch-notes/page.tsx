@@ -163,7 +163,7 @@ export default function PatchNotesPage() {
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex flex-wrap items-start justify-between gap-6 mb-12">
             <div>
-              <h1 className="text-4xl md:text-5xl font-light text-white mb-3">Patch Notes</h1>
+              <h1 className="text-4xl md:text-5xl font-semibold mb-3 bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Patch Notes</h1>
               <p className="text-gray-400 max-w-3xl">Review the latest feature updates and bug fixes released for Marvel Rivals.</p>
             </div>
             <button

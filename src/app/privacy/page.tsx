@@ -7,7 +7,7 @@ export default function PrivacyPage() {
       <Navbar />
       <main className="flex-1 pt-32 pb-16 px-6">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl font-bold text-white mb-8">Privacy Policy</h1>
+          <h1 className="text-4xl font-semibold mb-8 bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Privacy Policy</h1>
           
           <div className="space-y-8 text-gray-300">
             <section>

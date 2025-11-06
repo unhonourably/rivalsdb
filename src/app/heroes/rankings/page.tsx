@@ -139,8 +139,8 @@ export default function HeroRankingsPage() {
       <main className="flex-1 pt-32 pb-24 px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16 animate-fade-in-up">
-            <h1 className="text-4xl md:text-6xl font-light text-white mb-6">
-              Hero <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Rankings</span>
+            <h1 className="text-4xl md:text-6xl font-semibold mb-6" style={{ fontFamily: 'var(--font-fredoka)' }}>
+              <span className="text-white">Hero </span><span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Rankings</span>
             </h1>
             <p className="text-gray-400 text-lg max-w-3xl mx-auto mb-4">
               Comprehensive hero rankings based on our RivalsDB Score algorithm, analyzing win rate, KDA, eliminations per match, accuracy, and average score across all competitive matches.

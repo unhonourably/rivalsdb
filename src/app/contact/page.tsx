@@ -8,7 +8,7 @@ export default function ContactPage() {
       <main className="flex-1 pt-32 pb-16 px-6">
         <div className="max-w-3xl mx-auto">
           <div className="mb-12 text-center">
-            <h1 className="text-4xl font-bold text-white mb-4">Contact Us</h1>
+            <h1 className="text-4xl font-semibold mb-4 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Contact Us</h1>
             <p className="text-gray-400 text-lg">
               Have questions or feedback? Feel free to reach out!
             </p>

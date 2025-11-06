@@ -8,7 +8,7 @@ export default function InfoPage() {
       <main className="flex-1 pt-32 pb-16 px-6">
         <div className="max-w-5xl mx-auto">
           <div className="mb-12">
-            <h1 className="text-4xl font-bold text-white mb-4">Data Update Schedule</h1>
+            <h1 className="text-4xl font-semibold mb-4 bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Data Update Schedule</h1>
             <p className="text-gray-400 text-lg">
               Our database automatically syncs with the latest Marvel Rivals data on the following schedule. All times are in Central Standard Time (CST).
             </p>

@@ -165,7 +165,7 @@ export default function LeaderboardsPage() {
         <div className="max-w-6xl mx-auto px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10">
             <div>
-              <h1 className="text-4xl md:text-5xl font-light text-white mb-3">Global Leaderboards</h1>
+              <h1 className="text-4xl md:text-5xl font-semibold mb-3 bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Global Leaderboards</h1>
               <p className="text-gray-400 max-w-2xl">
                 Track the top Marvel Rivals players worldwide. Rankings update live from the official API.
               </p>

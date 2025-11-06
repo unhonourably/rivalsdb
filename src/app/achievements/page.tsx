@@ -176,7 +176,7 @@ export default function AchievementsPage() {
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex flex-wrap items-start justify-between gap-6 mb-10">
             <div>
-              <h1 className="text-4xl md:text-5xl font-light text-white mb-3">Achievements</h1>
+              <h1 className="text-4xl md:text-5xl font-semibold mb-3 bg-gradient-to-r from-yellow-400 to-amber-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Achievements</h1>
               <p className="text-gray-400 max-w-2xl">
                 Browse every Marvel Rivals achievement, including tier goals, rewards, and rarity details.
               </p>
