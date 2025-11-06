@@ -9,14 +9,66 @@ jobs:
   sync-hero-leaderboards:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger hero leaderboards batch sync
+      - name: Get hero IDs from API
+        id: get-heroes
         run: |
+          echo "Fetching heroes from API..."
+          RESPONSE=$(curl -s -L https://rivalsdb.gg/api/heroes)
+          
+          if ! echo "$RESPONSE" | jq empty 2>/dev/null; then
+            echo "Error: Response is not valid JSON"
+            exit 1
+          fi
+          
+          HEROES=$(echo "$RESPONSE" | jq -r '.heroes[]?.id // empty' | sort -n | tr '\n' ' ')
+          
+          if [ -z "$HEROES" ]; then
+            echo "Error: No heroes found in API response"
+            exit 1
+          fi
+          
+          echo "hero_ids=$HEROES" >> $GITHUB_OUTPUT
+          HERO_ARRAY=($HEROES)
+          echo "Found ${#HERO_ARRAY[@]} heroes to sync"
+
+      - name: Sync each hero's leaderboard
+        run: |
+          HERO_IDS="${{ steps.get-heroes.outputs.hero_ids }}"
+          HERO_ARRAY=($HERO_IDS)
+          TOTAL_HEROES=${#HERO_ARRAY[@]}
+          SUCCESS=0
+          FAILED=0
+          
           echo "Starting hero leaderboards sync at $(date -u)"
+          echo "Syncing ${TOTAL_HEROES} heroes individually..."
           
-          RESPONSE=$(curl -s -L -X POST https://rivalsdb.gg/api/admin/heroes-leaderboards-batch \
-            -H "Content-Type: application/json" \
-            -d '{"startIndex": 0, "batchSize": 5}')
+          for HERO_ID in "${HERO_ARRAY[@]}"; do
+            echo ""
+            echo "Syncing leaderboard for hero ID: $HERO_ID"
+            
+            if curl -s -L -X POST https://rivalsdb.gg/api/admin/hero-leaderboard-sync \
+              -H "Content-Type: application/json" \
+              -d "{\"heroId\":\"$HERO_ID\"}" \
+              --fail --silent --show-error; then
+              SUCCESS=$((SUCCESS + 1))
+              echo "✅ Successfully synced hero $HERO_ID"
+            else
+              FAILED=$((FAILED + 1))
+              echo "❌ Failed to sync hero $HERO_ID"
+            fi
+            
+            sleep 1
+          done
           
-          echo "Sync initiated"
-          echo "Response: $RESPONSE"
+          echo ""
+          echo "=========================================="
+          echo "Sync completed!"
+          echo "Total heroes: $TOTAL_HEROES"
+          echo "Successful: $SUCCESS"
+          echo "Failed: $FAILED"
+          echo "=========================================="
+          
+          if [ $FAILED -gt 0 ]; then
+            exit 1
+          fi
 
