@@ -162,10 +162,10 @@ export default function Home() {
   const [showcaseError, setShowcaseError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<'wins' | 'winrate' | 'damage' | 'damage_taken' | 'healing' | 'playtime'>('wins')
   const [selectedPlayerCategory, setSelectedPlayerCategory] = useState<'score' | 'winrate' | 'win_count' | 'max_level' | 'battle_count' | 'max_rank_score'>('score')
-  const [recentUpdates, setRecentUpdates] = useState<any>(null)
+  const [steamNews, setSteamNews] = useState<any[]>([])
   const [battlePassItems, setBattlePassItems] = useState<any[]>([])
   const [battlePassSeasonName, setBattlePassSeasonName] = useState<string>('')
-  const [currentUpdateIndex, setCurrentUpdateIndex] = useState(0)
+  const [currentNewsIndex, setCurrentNewsIndex] = useState(0)
   const [currentBattlePassIndex, setCurrentBattlePassIndex] = useState(0)
   
   const categoryLabels: Record<string, string> = {
@@ -329,18 +329,18 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    const fetchRecentUpdates = async () => {
+    const fetchSteamNews = async () => {
       try {
-        const response = await fetch('/api/recent-updates')
+        const response = await fetch('/api/steam/news?count=5')
         if (response.ok) {
           const data = await response.json()
-          setRecentUpdates(data)
+          setSteamNews(data.news || [])
         }
       } catch (error) {
-        console.error('Failed to fetch recent updates:', error)
+        console.error('Failed to fetch Steam news:', error)
       }
     }
-    fetchRecentUpdates()
+    fetchSteamNews()
   }, [])
 
   useEffect(() => {
@@ -360,16 +360,14 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    if (!recentUpdates) return
-    const updates = [recentUpdates.patchNote, recentUpdates.devDiary, recentUpdates.balance].filter(Boolean)
-    if (updates.length === 0) return
+    if (steamNews.length === 0) return
     
     const interval = setInterval(() => {
-      setCurrentUpdateIndex((prev) => (prev + 1) % updates.length)
+      setCurrentNewsIndex((prev) => (prev + 1) % steamNews.length)
     }, 5000)
     
     return () => clearInterval(interval)
-  }, [recentUpdates])
+  }, [steamNews])
 
   useEffect(() => {
     if (battlePassItems.length === 0) return
@@ -960,45 +958,78 @@ export default function Home() {
         <section className="py-24 px-6 lg:px-8 border-t border-white/5">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-12">
-              <h2 className="text-3xl sm:text-4xl font-semibold mb-4 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Latest Updates</h2>
+              <h2 className="text-3xl sm:text-4xl font-semibold mb-4 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>Latest Game News</h2>
               <p className="text-gray-500 text-sm max-w-2xl mx-auto">
-                Stay up to date with the latest patch notes, developer diaries, and balance changes
+                Stay up to date with the latest news, updates, and announcements from Marvel Rivals
               </p>
             </div>
 
-            {recentUpdates ? (
+            {steamNews.length > 0 ? (
               <div className="relative h-96 rounded-3xl border border-white/10 overflow-hidden">
-                {[recentUpdates.patchNote, recentUpdates.devDiary, recentUpdates.balance].filter(Boolean).map((update, index) => {
-                  const updateType = update === recentUpdates.patchNote ? 'Patch Note' : update === recentUpdates.devDiary ? 'Dev Diary' : 'Balance Change'
-                  const updateColor = update === recentUpdates.patchNote ? 'from-blue-500/20' : update === recentUpdates.devDiary ? 'from-purple-500/20' : 'from-amber-500/20'
+                {steamNews.map((news, index) => {
+                  const stripHtml = (html: string) => {
+                    if (!html) return ''
+                    return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
+                  }
+                  
+                  const formatDate = (timestamp: number) => {
+                    if (!timestamp) return ''
+                    const date = new Date(timestamp * 1000)
+                    return date.toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })
+                  }
+                  
+                  const preview = stripHtml(news.contents || '').substring(0, 200)
+                  const feedType = news.feedName || news.feedLabel || 'News'
                   
                   return (
                     <div
-                      key={index}
+                      key={news.gid || index}
                       className={`absolute inset-0 transition-opacity duration-1000 ${
-                        currentUpdateIndex === index ? 'opacity-100' : 'opacity-0'
+                        currentNewsIndex === index ? 'opacity-100' : 'opacity-0'
                       }`}
                     >
-                      <div className={`h-full bg-gradient-to-br ${updateColor} to-black/80 p-8 flex flex-col justify-between`}>
+                      <div className="h-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 to-black/80 p-8 flex flex-col justify-between">
                         <div>
-                          <div className="inline-block px-4 py-1 rounded-full bg-white/10 border border-white/20 text-white text-sm font-medium mb-4">
-                            {updateType}
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="inline-block px-4 py-1 rounded-full bg-white/10 border border-white/20 text-white text-sm font-medium">
+                              {feedType}
+                            </div>
+                            {news.author && (
+                              <span className="text-gray-400 text-sm">by {news.author}</span>
+                            )}
+                            {news.date && (
+                              <span className="text-gray-500 text-xs">{formatDate(news.date)}</span>
+                            )}
                           </div>
-                          <h3 className="text-3xl font-bold text-white mb-4">{update.title}</h3>
-                          {update.date_label && (
-                            <p className="text-gray-300 text-sm mb-4">{update.date_label}</p>
+                          <h3 className="text-3xl font-bold text-white mb-4 line-clamp-2">{news.title}</h3>
+                          {preview && (
+                            <p className="text-gray-300 line-clamp-4 mb-4">{preview}...</p>
                           )}
-                          {update.preview && (
-                            <p className="text-gray-300 line-clamp-3">{update.preview}</p>
+                          {news.url && (
+                            <a
+                              href={news.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 text-purple-400 hover:text-purple-300 transition-colors text-sm font-medium"
+                            >
+                              Read full article
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
                           )}
                         </div>
                         <div className="flex gap-2">
-                          {[recentUpdates.patchNote, recentUpdates.devDiary, recentUpdates.balance].filter(Boolean).map((_, dotIndex) => (
+                          {steamNews.map((_, dotIndex) => (
                             <button
                               key={dotIndex}
-                              onClick={() => setCurrentUpdateIndex(dotIndex)}
+                              onClick={() => setCurrentNewsIndex(dotIndex)}
                               className={`h-2 rounded-full transition-all ${
-                                currentUpdateIndex === dotIndex ? 'w-8 bg-white' : 'w-2 bg-white/40'
+                                currentNewsIndex === dotIndex ? 'w-8 bg-white' : 'w-2 bg-white/40'
                               }`}
                             />
                           ))}
@@ -1010,7 +1041,8 @@ export default function Home() {
               </div>
             ) : (
               <div className="text-center text-gray-400 py-20">
-                Loading updates...
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white mb-4"></div>
+                <p>Loading news...</p>
               </div>
             )}
           </div>
