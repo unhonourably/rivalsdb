@@ -923,6 +923,18 @@ export default function Home() {
                 )}
               </div>
             )}
+
+            <div className="mt-12 text-center">
+              <Link
+                href="/heroes/rankings"
+                className="inline-flex items-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 text-white font-medium hover:from-emerald-500/30 hover:to-cyan-500/30 hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-emerald-500/20"
+              >
+                <span>View Complete Hero Rankings</span>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </Link>
+            </div>
           </div>
         </section>
 
