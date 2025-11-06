@@ -1,0 +1,97 @@
+name: Hero Stats Auto-Refresh
+
+on:
+  schedule:
+    - cron: '0 0 * * *'    # 00:00 UTC
+    - cron: '36 0 * * *'   # 00:36 UTC
+    - cron: '12 1 * * *'   # 01:12 UTC
+    - cron: '48 1 * * *'   # 01:48 UTC
+    - cron: '24 2 * * *'   # 02:24 UTC
+    - cron: '0 3 * * *'    # 03:00 UTC
+    - cron: '36 3 * * *'   # 03:36 UTC
+    - cron: '12 4 * * *'   # 04:12 UTC
+    - cron: '48 4 * * *'   # 04:48 UTC
+    - cron: '24 5 * * *'   # 05:24 UTC
+    - cron: '0 6 * * *'    # 06:00 UTC
+    - cron: '36 6 * * *'   # 06:36 UTC
+    - cron: '12 7 * * *'   # 07:12 UTC
+    - cron: '48 7 * * *'   # 07:48 UTC
+    - cron: '24 8 * * *'   # 08:24 UTC
+    - cron: '0 9 * * *'    # 09:00 UTC
+    - cron: '36 9 * * *'   # 09:36 UTC
+    - cron: '12 10 * * *'  # 10:12 UTC
+    - cron: '48 10 * * *'  # 10:48 UTC
+    - cron: '24 11 * * *'  # 11:24 UTC
+    - cron: '0 12 * * *'   # 12:00 UTC
+    - cron: '36 12 * * *'  # 12:36 UTC
+    - cron: '12 13 * * *'  # 13:12 UTC
+    - cron: '48 13 * * *'  # 13:48 UTC
+    - cron: '24 14 * * *'  # 14:24 UTC
+    - cron: '0 15 * * *'   # 15:00 UTC
+    - cron: '36 15 * * *'  # 15:36 UTC
+    - cron: '12 16 * * *'  # 16:12 UTC
+    - cron: '48 16 * * *'  # 16:48 UTC
+    - cron: '24 17 * * *'  # 17:24 UTC
+    - cron: '0 18 * * *'   # 18:00 UTC
+    - cron: '36 18 * * *'  # 18:36 UTC
+    - cron: '12 19 * * *'  # 19:12 UTC
+    - cron: '48 19 * * *'  # 19:48 UTC
+    - cron: '24 20 * * *'  # 20:24 UTC
+    - cron: '0 21 * * *'   # 21:00 UTC
+    - cron: '36 21 * * *'  # 21:36 UTC
+    - cron: '12 22 * * *'  # 22:12 UTC
+    - cron: '48 22 * * *'  # 22:48 UTC
+    - cron: '24 23 * * *'  # 23:24 UTC
+  workflow_dispatch:
+
+jobs:
+  refresh-hero-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Calculate hero index
+        id: hero-index
+        run: |
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          
+          TOTAL_MINUTES=$((HOUR * 60 + MINUTE))
+          HERO_INDEX=$((TOTAL_MINUTES / 36))
+          
+          echo "hero_index=$HERO_INDEX" >> $GITHUB_OUTPUT
+          echo "Refreshing hero index: $HERO_INDEX (out of 40 heroes, cycling throughout the day)"
+
+      - name: Get hero IDs from API
+        id: hero-ids
+        run: |
+          HEROES=$(curl -s https://rivalsdb.gg/api/heroes | jq -r '.heroes | map(.id) | join(" ")')
+          HERO_ARRAY=($HEROES)
+          
+          INDEX=${{ steps.hero-index.outputs.hero_index }}
+          TOTAL_HEROES=${#HERO_ARRAY[@]}
+          
+          if [ $INDEX -ge $TOTAL_HEROES ]; then
+            INDEX=$((INDEX % TOTAL_HEROES))
+          fi
+          
+          HERO_ID=${HERO_ARRAY[$INDEX]}
+          
+          echo "hero_id=$HERO_ID" >> $GITHUB_OUTPUT
+          echo "Total heroes: $TOTAL_HEROES"
+          echo "Syncing stats for hero ID: $HERO_ID (index $INDEX)"
+
+      - name: Refresh hero stats
+        run: |
+          curl -X POST https://rivalsdb.gg/api/admin/hero-stats-sync \
+            -H "Content-Type: application/json" \
+            -d "{\"heroId\":\"${{ steps.hero-ids.outputs.hero_id }}\"}" \
+            --fail --silent --show-error
+          
+          echo "Successfully refreshed stats for hero ${{ steps.hero-ids.outputs.hero_id }}"
+
+      - name: Log completion
+        if: always()
+        run: |
+          echo "Hero stats refresh job completed at $(date -u)"
+          echo "Hero index: ${{ steps.hero-index.outputs.hero_index }}"
+          echo "Hero ID: ${{ steps.hero-ids.outputs.hero_id }}"
+

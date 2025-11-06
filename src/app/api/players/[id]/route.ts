@@ -5,10 +5,10 @@ const API_KEY = process.env.MARVEL_RIVALS_API_KEY || '188d3cd06e7db493dbd0081177
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { uid: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const uid = params.uid
+    const uid = params.id
 
     const dbPlayer = await getPlayerByUid(uid)
 
@@ -71,10 +71,10 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { uid: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const uid = params.uid
+    const uid = params.id
     const body = await request.json()
     const stats = body.stats || body.fullProfile
 
