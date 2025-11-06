@@ -63,21 +63,24 @@ jobs:
       - name: Get hero IDs from API
         id: hero-ids
         run: |
-          RESPONSE=$(curl -s -f -w "\n%{http_code}" https://rivalsdb.gg/api/heroes)
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "Fetching heroes from API..."
+          RESPONSE=$(curl -s https://rivalsdb.gg/api/heroes)
           
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Error: API returned HTTP $HTTP_CODE"
-            echo "Response: $BODY"
+          echo "Checking if response is valid JSON..."
+          if ! echo "$RESPONSE" | jq empty 2>/dev/null; then
+            echo "Error: Response is not valid JSON"
+            echo "Response received:"
+            echo "$RESPONSE" | head -20
             exit 1
           fi
           
-          HEROES=$(echo "$BODY" | jq -r '.heroes | map(.id) | join(" ")')
+          echo "Parsing hero IDs..."
+          HEROES=$(echo "$RESPONSE" | jq -r '.heroes[]?.id // empty' | tr '\n' ' ')
           
-          if [ -z "$HEROES" ] || [ "$HEROES" = "null" ]; then
-            echo "Error: Failed to parse heroes from API response"
-            echo "Response body: $BODY"
+          if [ -z "$HEROES" ]; then
+            echo "Error: No heroes found in API response"
+            echo "Response:"
+            echo "$RESPONSE"
             exit 1
           fi
           
@@ -86,8 +89,10 @@ jobs:
           INDEX=${{ steps.hero-index.outputs.hero_index }}
           TOTAL_HEROES=${#HERO_ARRAY[@]}
           
+          echo "Found $TOTAL_HEROES heroes"
+          
           if [ $TOTAL_HEROES -eq 0 ]; then
-            echo "Error: No heroes found in response"
+            echo "Error: Hero array is empty"
             exit 1
           fi
           
