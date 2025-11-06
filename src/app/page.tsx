@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import PlayerCount from '@/components/PlayerCount'
 import rivalsLogo from '@/components/rivalslogo.png'
 
 const API_BASE = 'https://marvelrivalsapi.com/api/v1'
@@ -459,6 +460,13 @@ export default function Home() {
               <p className="text-base sm:text-lg text-gray-500 max-w-2xl mx-auto mt-4 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
                 Your ultimate companion for Marvel Rivals
               </p>
+              
+              {/* Player Count */}
+              <div className="mt-6 animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
+                <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm">
+                  <PlayerCount />
+                </div>
+              </div>
             </div>
 
             {/* Navigation Buttons */}

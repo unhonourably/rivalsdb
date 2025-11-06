@@ -77,6 +77,183 @@ const SmartImage: React.FC<{ paths: string[]; alt: string; className?: string }>
   )
 }
 
+function SteamAchievementsSection() {
+  const [steamData, setSteamData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchSteamData = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const response = await fetch('/api/steam/achievements')
+        if (response.ok) {
+          const data = await response.json()
+          setSteamData(data)
+        } else {
+          setError('Failed to load Steam achievement data')
+        }
+      } catch (err) {
+        setError('Failed to load Steam achievement data')
+        console.error('Error fetching Steam achievements:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchSteamData()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="mt-16 pt-16 border-t border-white/10">
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+          <p className="text-gray-400 mt-4 text-sm">Loading Steam achievement statistics...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !steamData || !steamData.achievements || steamData.achievements.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="mt-16 pt-16 border-t border-white/10">
+      <div className="mb-8">
+        <h2 className="text-3xl font-semibold mb-2 bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent" style={{ fontFamily: 'var(--font-fredoka)' }}>
+          Steam Achievement Statistics
+        </h2>
+        <p className="text-gray-400 text-sm">
+          Global achievement completion rates from Steam players
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <div className="border border-white/10 bg-gradient-to-br from-white/[0.03] to-white/[0.01] rounded-xl p-6">
+          <div className="text-gray-400 text-sm mb-2">Total Achievements</div>
+          <div className="text-3xl font-bold text-white">{steamData.totalAchievements}</div>
+        </div>
+        <div className="border border-white/10 bg-gradient-to-br from-white/[0.03] to-white/[0.01] rounded-xl p-6">
+          <div className="text-gray-400 text-sm mb-2">Average Completion</div>
+          <div className="text-3xl font-bold text-white">
+            {steamData.averageCompletion != null ? steamData.averageCompletion.toFixed(1) : '0.0'}%
+          </div>
+        </div>
+        <div className="border border-white/10 bg-gradient-to-br from-white/[0.03] to-white/[0.01] rounded-xl p-6">
+          <div className="text-gray-400 text-sm mb-2">Data Source</div>
+          <div className="text-lg font-semibold text-white">Steam</div>
+          <div className="text-xs text-gray-500 mt-1">Updated hourly</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div>
+          <h3 className="text-xl font-semibold text-white mb-4">Rarest Achievements</h3>
+          <div className="space-y-3">
+            {(steamData.rarestAchievements || []).slice(0, 5).map((ach: any, index: number) => (
+              <div
+                key={ach.name}
+                className="border border-white/10 bg-gradient-to-br from-white/[0.03] to-white/[0.01] rounded-lg p-4 flex items-center gap-4"
+              >
+                <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center">
+                  {ach.icon ? (
+                    <img
+                      src={`https://cdn.steamstatic.com/steamcommunity/public/images/apps/2767030/${ach.icon}`}
+                      alt={ach.displayName || ach.name}
+                      className="w-full h-full object-cover rounded-lg"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none'
+                      }}
+                    />
+                  ) : (
+                    <div className="text-2xl">🏆</div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-white font-medium truncate">
+                    {ach.displayName || ach.name}
+                  </div>
+                  {ach.description && (
+                    <div className="text-sm text-gray-400 truncate">
+                      {ach.description}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-shrink-0 text-right">
+                  <div className="text-lg font-bold text-red-400">
+                    {ach.percent != null ? ach.percent.toFixed(1) : '0.0'}%
+                  </div>
+                  <div className="text-xs text-gray-500">completed</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-xl font-semibold text-white mb-4">Most Common Achievements</h3>
+          <div className="space-y-3">
+            {(steamData.mostCommonAchievements || []).slice(0, 5).map((ach: any, index: number) => (
+              <div
+                key={ach.name}
+                className="border border-white/10 bg-gradient-to-br from-white/[0.03] to-white/[0.01] rounded-lg p-4 flex items-center gap-4"
+              >
+                <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center">
+                  {ach.icon ? (
+                    <img
+                      src={`https://cdn.steamstatic.com/steamcommunity/public/images/apps/2767030/${ach.icon}`}
+                      alt={ach.displayName || ach.name}
+                      className="w-full h-full object-cover rounded-lg"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none'
+                      }}
+                    />
+                  ) : (
+                    <div className="text-2xl">✅</div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-white font-medium truncate">
+                    {ach.displayName || ach.name}
+                  </div>
+                  {ach.description && (
+                    <div className="text-sm text-gray-400 truncate">
+                      {ach.description}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-shrink-0 text-right">
+                  <div className="text-lg font-bold text-green-400">
+                    {ach.percent != null ? ach.percent.toFixed(1) : '0.0'}%
+                  </div>
+                  <div className="text-xs text-gray-500">completed</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-8 border border-blue-500/20 bg-blue-500/10 rounded-xl p-4">
+        <div className="flex items-start gap-3">
+          <div className="text-blue-400 text-xl">ℹ️</div>
+          <div className="flex-1">
+            <h4 className="text-sm font-medium text-blue-300 mb-1">About Steam Achievement Data</h4>
+            <p className="text-sm text-blue-200/80 leading-relaxed">
+              These statistics show global achievement completion rates from all Steam players. 
+              The percentages represent what portion of Steam players have unlocked each achievement. 
+              Data is cached and updated hourly from Steam's API.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AchievementsPage() {
   const [achievements, setAchievements] = useState<Achievement[]>([])
   const [loading, setLoading] = useState(true)
@@ -328,6 +505,8 @@ export default function AchievementsPage() {
               No achievements match the current filters. Sync data via the admin page if needed.
             </div>
           )}
+
+          <SteamAchievementsSection />
         </div>
       </main>
 
