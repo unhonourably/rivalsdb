@@ -719,6 +719,38 @@ export default function PlayerDetailPage() {
   }, [playerId])
 
   useEffect(() => {
+    const fetchMatchHistory = async () => {
+      if (!playerId || !playerData) return
+      
+      if (playerData.match_history && playerData.match_history.length > 0) {
+        return
+      }
+      
+      try {
+        const response = await fetch(`/api/players/${playerId}/match-history`)
+        
+        if (response.ok) {
+          const data = await response.json()
+          
+          if (data.match_history && data.match_history.length > 0) {
+            setPlayerData(prev => {
+              if (!prev) return prev
+              return {
+                ...prev,
+                match_history: data.match_history
+              }
+            })
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching match history:', error)
+      }
+    }
+    
+    fetchMatchHistory()
+  }, [playerId, playerData?.uid])
+
+  useEffect(() => {
     if (!playerData) return
 
     const collectedNames: Record<number, string> = {}
