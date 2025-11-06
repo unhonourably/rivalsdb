@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAllHeroes } from '@/lib/heroes'
-import { getHeroStats } from '@/lib/heroStats'
+import { getAllHeroes, getHeroStats } from '@/lib/heroes'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,20 +14,20 @@ function calculateRivalsDbScore(stats: any): number {
   const kda = parseNum(stats.kda)
   const sessionHitRate = parseNum(stats.session_hit_rate)
   const matches = parseNum(stats.matches)
-  const eliminations = parseNum(stats.eliminations)
+  const kills = parseNum(stats.kills)
   const avgScore = parseNum(stats.average_score)
 
-  const eliminationsPerMatch = matches > 0 ? eliminations / matches : 0
+  const killsPerMatch = matches > 0 ? kills / matches : 0
 
   const confidenceMultiplier = Math.min(matches / 500, 1)
 
   const winRateScore = (winRate > 1 ? winRate : winRate * 100) * 0.35
   const kdaScore = Math.min((kda / 2.5) * 25, 25)
-  const eliminationsScore = Math.min((eliminationsPerMatch / 10) * 20, 20)
+  const killsScore = Math.min((killsPerMatch / 10) * 20, 20)
   const hitRateScore = (sessionHitRate > 1 ? sessionHitRate : sessionHitRate * 100) * 0.15
   const avgScoreScore = Math.min((avgScore / 4000) * 5, 5)
 
-  const rawScore = winRateScore + kdaScore + eliminationsScore + hitRateScore + avgScoreScore
+  const rawScore = winRateScore + kdaScore + killsScore + hitRateScore + avgScoreScore
   const finalScore = rawScore * confidenceMultiplier
 
   return Math.round(finalScore * 10) / 10
@@ -49,7 +48,7 @@ export async function GET() {
             win_rate: 0,
             kda: 0,
             matches: 0,
-            eliminations: 0,
+            kills: 0,
             deaths: 0,
             assists: 0,
             total_hero_damage: 0,
@@ -69,7 +68,7 @@ export async function GET() {
           win_rate: parseFloat(String(stats.win_rate || 0)),
           kda: parseFloat(String(stats.kda || 0)),
           matches: parseInt(String(stats.matches || 0)),
-          eliminations: parseInt(String(stats.eliminations || 0)),
+          kills: parseInt(String(stats.kills || 0)),
           deaths: parseInt(String(stats.deaths || 0)),
           assists: parseInt(String(stats.assists || 0)),
           total_hero_damage: parseInt(String(stats.total_hero_damage || 0)),

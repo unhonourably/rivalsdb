@@ -14,7 +14,7 @@ interface HeroRanking {
   win_rate: number
   kda: number
   matches: number
-  eliminations: number
+  kills: number
   deaths: number
   assists: number
   total_hero_damage: number
