@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Fredoka } from "next/font/google";
 import "./globals.css";
 import rivalsLogo from '@/components/rivalslogo.png';
+import MobileNav from '@/components/MobileNav';
 
 const inter = Inter({ 
   subsets: ["latin"],
@@ -31,7 +32,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${fredoka.variable} font-sans antialiased`}>{children}</body>
+      <body className={`${inter.variable} ${fredoka.variable} font-sans antialiased`}>
+        {children}
+        <MobileNav />
+      </body>
     </html>
   );
 }

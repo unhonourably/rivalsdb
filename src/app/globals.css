@@ -6,6 +6,12 @@
   html {
     scroll-behavior: smooth;
   }
+
+  @media (max-width: 767px) {
+    body {
+      padding-bottom: 4rem;
+    }
+  }
 }
 
 @layer utilities {
