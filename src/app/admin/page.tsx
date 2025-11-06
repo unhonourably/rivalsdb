@@ -222,6 +222,8 @@ function HeroesManagerPanel() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState<Record<string, boolean>>({})
   const [success, setSuccess] = useState<Record<string, string | null>>({})
+  const [isBatchSyncing, setIsBatchSyncing] = useState(false)
+  const [batchProgress, setBatchProgress] = useState<string | null>(null)
 
   const fetchHeroes = async () => {
     try {
@@ -271,10 +273,65 @@ function HeroesManagerPanel() {
     }
   }
 
+  const handleSyncAllZeroEntries = async () => {
+    const zeroEntryHeroes = heroes.filter(h => (h.leaderboard_count || 0) === 0)
+    
+    if (zeroEntryHeroes.length === 0) {
+      setBatchProgress('No heroes with zero entries found')
+      setTimeout(() => setBatchProgress(null), 3000)
+      return
+    }
+    
+    setIsBatchSyncing(true)
+    setBatchProgress(`Found ${zeroEntryHeroes.length} heroes to sync...`)
+    
+    const batchSize = 3
+    let totalSynced = 0
+    
+    for (let i = 0; i < zeroEntryHeroes.length; i += batchSize) {
+      const batch = zeroEntryHeroes.slice(i, i + batchSize)
+      setBatchProgress(`Syncing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(zeroEntryHeroes.length / batchSize)}... (${i + batch.length}/${zeroEntryHeroes.length})`)
+      
+      await Promise.all(
+        batch.map(async (hero) => {
+          try {
+            const response = await fetch('/api/admin/hero-leaderboard-sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ heroId: hero.id })
+            })
+            
+            if (response.ok) {
+              const result = await response.json()
+              setHeroes(prev => prev.map(h => 
+                h.id === hero.id ? { ...h, leaderboard_count: result.count || 0 } : h
+              ))
+              totalSynced++
+            }
+          } catch (error) {
+            console.error(`Failed to sync hero ${hero.id}:`, error)
+          }
+        })
+      )
+      
+      if (i + batchSize < zeroEntryHeroes.length) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+      }
+    }
+    
+    setBatchProgress(`✅ Completed! Synced ${totalSynced}/${zeroEntryHeroes.length} heroes`)
+    setTimeout(() => {
+      setBatchProgress(null)
+      setIsBatchSyncing(false)
+    }, 5000)
+  }
+
   const toTitleCase = (str: string) => {
     if (!str) return ''
     return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
   }
+  
+  const zeroEntryCount = heroes.filter(h => (h.leaderboard_count || 0) === 0).length
 
   if (loading) {
     return (
@@ -292,6 +349,32 @@ function HeroesManagerPanel() {
           Manually sync individual hero leaderboards. Use this to update specific heroes without running a full batch sync.
         </p>
       </div>
+      
+      {zeroEntryCount > 0 && (
+        <div className="border border-white/10 bg-white/[0.02] rounded-xl p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-white font-medium mb-1">Sync All Zero Entries</h3>
+              <p className="text-sm text-gray-400">
+                {zeroEntryCount} hero{zeroEntryCount !== 1 ? 's' : ''} with 0 entries • Syncs in batches of 3
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSyncAllZeroEntries}
+              disabled={isBatchSyncing}
+              className="px-4 py-2 rounded-lg bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isBatchSyncing ? 'Syncing...' : 'Sync All Zero'}
+            </button>
+          </div>
+          {batchProgress && (
+            <div className="mt-3 text-sm text-gray-300 border-t border-white/10 pt-3">
+              {batchProgress}
+            </div>
+          )}
+        </div>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {heroes.map((hero) => (
