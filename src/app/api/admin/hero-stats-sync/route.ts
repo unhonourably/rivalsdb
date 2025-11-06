@@ -4,8 +4,11 @@ import { fetchHeroStatsFromApi, saveHeroStats } from '@/lib/heroes'
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
+  let heroId: string | undefined
+  
   try {
-    const { heroId } = await request.json()
+    const body = await request.json()
+    heroId = body.heroId
 
     if (!heroId) {
       return NextResponse.json({ error: 'Hero ID is required' }, { status: 400 })
@@ -19,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error(`Error syncing stats for hero ${heroId}:`, error)
+    console.error(`Error syncing stats for hero ${heroId || 'unknown'}:`, error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to sync hero stats' },
       { status: 500 }
