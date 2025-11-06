@@ -1,0 +1,18 @@
+name: Hero Costumes Sync
+
+on:
+  schedule:
+    - cron: '0 14 * * 2'
+  workflow_dispatch:
+
+jobs:
+  sync-hero-costumes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync hero costumes
+        run: |
+          echo "Syncing hero costumes at $(date -u)"
+          curl -X POST -L https://rivalsdb.gg/api/admin/sync-hero-costumes \
+            --fail --silent --show-error
+          echo "Successfully synced hero costumes"
+

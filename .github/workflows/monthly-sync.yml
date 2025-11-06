@@ -1,0 +1,84 @@
+name: Monthly Data Sync
+
+on:
+  schedule:
+    - cron: '0 14 1 * *'
+    - cron: '30 14 1 * *'
+    - cron: '0 15 1 * *'
+    - cron: '30 15 1 * *'
+    - cron: '0 16 1 * *'
+    - cron: '30 16 1 * *'
+  workflow_dispatch:
+
+jobs:
+  monthly-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine what to sync
+        id: sync-type
+        run: |
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          
+          if [ "$HOUR" == "14" ] && [ "$MINUTE" == "00" ]; then
+            echo "sync_type=achievements" >> $GITHUB_OUTPUT
+            echo "Syncing Achievements"
+          elif [ "$HOUR" == "14" ] && [ "$MINUTE" == "30" ]; then
+            echo "sync_type=battlepass" >> $GITHUB_OUTPUT
+            echo "Syncing Battle Pass"
+          elif [ "$HOUR" == "15" ] && [ "$MINUTE" == "00" ]; then
+            echo "sync_type=patchnotes" >> $GITHUB_OUTPUT
+            echo "Syncing Patch Notes"
+          elif [ "$HOUR" == "15" ] && [ "$MINUTE" == "30" ]; then
+            echo "sync_type=balances" >> $GITHUB_OUTPUT
+            echo "Syncing Balances"
+          elif [ "$HOUR" == "16" ] && [ "$MINUTE" == "00" ]; then
+            echo "sync_type=devdiaries" >> $GITHUB_OUTPUT
+            echo "Syncing Dev Diaries"
+          elif [ "$HOUR" == "16" ] && [ "$MINUTE" == "30" ]; then
+            echo "sync_type=gameversions" >> $GITHUB_OUTPUT
+            echo "Syncing Game Versions"
+          fi
+
+      - name: Sync Achievements
+        if: steps.sync-type.outputs.sync_type == 'achievements'
+        run: |
+          curl -X POST -L https://rivalsdb.gg/api/admin/sync-achievements \
+            --fail --silent --show-error
+          echo "Successfully synced achievements"
+
+      - name: Sync Battle Pass
+        if: steps.sync-type.outputs.sync_type == 'battlepass'
+        run: |
+          curl -X POST -L https://rivalsdb.gg/api/admin/sync-battlepass \
+            --fail --silent --show-error
+          echo "Successfully synced battle pass"
+
+      - name: Sync Patch Notes
+        if: steps.sync-type.outputs.sync_type == 'patchnotes'
+        run: |
+          curl -X POST -L https://rivalsdb.gg/api/admin/sync-patch-notes \
+            --fail --silent --show-error
+          echo "Successfully synced patch notes"
+
+      - name: Sync Balances
+        if: steps.sync-type.outputs.sync_type == 'balances'
+        run: |
+          curl -X POST -L https://rivalsdb.gg/api/admin/sync-balances \
+            --fail --silent --show-error
+          echo "Successfully synced balances"
+
+      - name: Sync Dev Diaries
+        if: steps.sync-type.outputs.sync_type == 'devdiaries'
+        run: |
+          curl -X POST -L https://rivalsdb.gg/api/admin/sync-dev-diaries \
+            --fail --silent --show-error
+          echo "Successfully synced dev diaries"
+
+      - name: Sync Game Versions
+        if: steps.sync-type.outputs.sync_type == 'gameversions'
+        run: |
+          curl -X POST -L https://rivalsdb.gg/api/admin/sync-game-versions \
+            --fail --silent --show-error
+          echo "Successfully synced game versions"
+

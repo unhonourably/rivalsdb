@@ -1,0 +1,58 @@
+name: Player Stats Sync
+
+on:
+  schedule:
+    - cron: '30 19 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-player-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get leaderboard players
+        id: get-players
+        run: |
+          echo "Fetching top players from leaderboard..."
+          RESPONSE=$(curl -s -L https://rivalsdb.gg/api/admin/leaderboard-players?limit=100)
+          
+          if ! echo "$RESPONSE" | jq empty 2>/dev/null; then
+            echo "Error: Response is not valid JSON"
+            exit 1
+          fi
+          
+          PLAYER_COUNT=$(echo "$RESPONSE" | jq '.players | length')
+          echo "Found $PLAYER_COUNT players to sync"
+          echo "player_count=$PLAYER_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Sync player stats in batches
+        run: |
+          echo "Syncing player stats in batches of 5 with 5-minute delays..."
+          
+          RESPONSE=$(curl -s -L https://rivalsdb.gg/api/admin/leaderboard-players?limit=100)
+          PLAYERS=$(echo "$RESPONSE" | jq -r '.players[] | .uid')
+          
+          BATCH_SIZE=5
+          BATCH_NUM=0
+          PLAYER_ARRAY=($PLAYERS)
+          
+          for ((i=0; i<${#PLAYER_ARRAY[@]}; i+=BATCH_SIZE)); do
+            BATCH_NUM=$((BATCH_NUM + 1))
+            echo "Processing batch $BATCH_NUM..."
+            
+            for ((j=i; j<i+BATCH_SIZE && j<${#PLAYER_ARRAY[@]}; j++)); do
+              PLAYER_UID=${PLAYER_ARRAY[$j]}
+              echo "Syncing player $PLAYER_UID..."
+              
+              curl -s -L -X POST https://rivalsdb.gg/api/admin/push-player-to-db \
+                -H "Content-Type: application/json" \
+                -d "{\"uid\":\"$PLAYER_UID\"}" || echo "Failed to sync $PLAYER_UID"
+            done
+            
+            if [ $((i + BATCH_SIZE)) -lt ${#PLAYER_ARRAY[@]} ]; then
+              echo "Waiting 5 minutes before next batch..."
+              sleep 300
+            fi
+          done
+          
+          echo "Completed syncing all player stats"
+

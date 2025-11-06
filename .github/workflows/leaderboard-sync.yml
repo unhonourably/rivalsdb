@@ -1,0 +1,18 @@
+name: Global Leaderboards Sync
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-leaderboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync global leaderboards
+        run: |
+          echo "Syncing global leaderboards at $(date -u)"
+          curl -X POST -L https://rivalsdb.gg/api/leaderboard/refresh \
+            --fail --silent --show-error
+          echo "Successfully synced global leaderboards"
+

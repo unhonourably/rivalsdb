@@ -1,0 +1,22 @@
+name: Hero Leaderboards Sync
+
+on:
+  schedule:
+    - cron: '30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-hero-leaderboards:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger hero leaderboards batch sync
+        run: |
+          echo "Starting hero leaderboards sync at $(date -u)"
+          
+          RESPONSE=$(curl -s -L -X POST https://rivalsdb.gg/api/admin/heroes-leaderboards-batch \
+            -H "Content-Type: application/json" \
+            -d '{"startIndex": 0, "batchSize": 5}')
+          
+          echo "Sync initiated"
+          echo "Response: $RESPONSE"
+
