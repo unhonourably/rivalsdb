@@ -64,7 +64,7 @@ jobs:
         id: hero-ids
         run: |
           echo "Fetching heroes from API..."
-          RESPONSE=$(curl -s https://rivalsdb.gg/api/heroes)
+          RESPONSE=$(curl -s -L https://rivalsdb.gg/api/heroes)
           
           echo "Checking if response is valid JSON..."
           if ! echo "$RESPONSE" | jq empty 2>/dev/null; then
@@ -108,7 +108,7 @@ jobs:
 
       - name: Refresh hero stats
         run: |
-          curl -X POST https://rivalsdb.gg/api/admin/hero-stats-sync \
+          curl -X POST -L https://rivalsdb.gg/api/admin/hero-stats-sync \
             -H "Content-Type: application/json" \
             -d "{\"heroId\":\"${{ steps.hero-ids.outputs.hero_id }}\"}" \
             --fail --silent --show-error
