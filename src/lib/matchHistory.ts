@@ -1,4 +1,5 @@
 import pool from './mysql'
+import { RowDataPacket } from 'mysql2/promise'
 
 export interface MatchHistoryRecord {
   match_uid: string
@@ -65,46 +66,29 @@ const ensureMatchHistoryTable = async () => {
 export const getMatchHistory = async (playerUid: number): Promise<MatchHistoryRecord[]> => {
   await ensureMatchHistoryTable()
   
-  const rows = await pool.query<Array<{
-    match_uid: string
-    player_uid: number
-    map_id: number | null
-    map_thumbnail: string | null
-    map_name: string | null
-    duration: number | null
-    season: number | null
-    winner_side: number | null
-    mvp_uid: number | null
-    svp_uid: number | null
-    match_time_stamp: number
-    play_mode_id: number | null
-    game_mode_id: number | null
-    score_info: unknown
-    player_performance: unknown
-    raw_json: unknown
-    created_at: Date
-  }>>('SELECT * FROM match_history WHERE player_uid = ? ORDER BY match_time_stamp DESC', [playerUid])
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT * FROM match_history WHERE player_uid = ? ORDER BY match_time_stamp DESC', 
+    [playerUid]
+  )
   
-  const [matches] = rows
-  
-  return matches.map(row => ({
-    match_uid: row.match_uid,
-    player_uid: row.player_uid,
-    map_id: row.map_id ?? 0,
-    map_thumbnail: row.map_thumbnail ?? undefined,
-    map_name: row.map_name ?? undefined,
-    duration: row.duration ?? undefined,
-    season: row.season ?? undefined,
-    winner_side: row.winner_side ?? undefined,
-    mvp_uid: row.mvp_uid ?? undefined,
-    svp_uid: row.svp_uid ?? undefined,
-    match_time_stamp: row.match_time_stamp,
-    play_mode_id: row.play_mode_id ?? undefined,
-    game_mode_id: row.game_mode_id ?? undefined,
+  return rows.map(row => ({
+    match_uid: String(row.match_uid),
+    player_uid: Number(row.player_uid),
+    map_id: row.map_id ? Number(row.map_id) : 0,
+    map_thumbnail: row.map_thumbnail ? String(row.map_thumbnail) : undefined,
+    map_name: row.map_name ? String(row.map_name) : undefined,
+    duration: row.duration ? Number(row.duration) : undefined,
+    season: row.season ? Number(row.season) : undefined,
+    winner_side: row.winner_side ? Number(row.winner_side) : undefined,
+    mvp_uid: row.mvp_uid ? Number(row.mvp_uid) : undefined,
+    svp_uid: row.svp_uid ? Number(row.svp_uid) : undefined,
+    match_time_stamp: Number(row.match_time_stamp),
+    play_mode_id: row.play_mode_id ? Number(row.play_mode_id) : undefined,
+    game_mode_id: row.game_mode_id ? Number(row.game_mode_id) : undefined,
     score_info: parseJsonField(row.score_info),
     player_performance: parseJsonField(row.player_performance),
     raw: parseJsonField(row.raw_json),
-    created_at: row.created_at
+    created_at: row.created_at as Date
   }))
 }
 
