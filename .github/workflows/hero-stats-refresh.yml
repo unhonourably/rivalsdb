@@ -74,8 +74,8 @@ jobs:
             exit 1
           fi
           
-          echo "Parsing hero IDs..."
-          HEROES=$(echo "$RESPONSE" | jq -r '.heroes[]?.id // empty' | tr '\n' ' ')
+          echo "Parsing and sorting hero IDs..."
+          HEROES=$(echo "$RESPONSE" | jq -r '.heroes[]?.id // empty' | sort -n | tr '\n' ' ')
           
           if [ -z "$HEROES" ]; then
             echo "Error: No heroes found in API response"
@@ -90,6 +90,7 @@ jobs:
           TOTAL_HEROES=${#HERO_ARRAY[@]}
           
           echo "Found $TOTAL_HEROES heroes"
+          echo "Hero IDs (first 10): ${HERO_ARRAY[@]:0:10}"
           
           if [ $TOTAL_HEROES -eq 0 ]; then
             echo "Error: Hero array is empty"
@@ -102,9 +103,16 @@ jobs:
           
           HERO_ID=${HERO_ARRAY[$INDEX]}
           
+          if [ -z "$HERO_ID" ]; then
+            echo "Error: Failed to get hero at index $INDEX"
+            echo "Hero array: ${HERO_ARRAY[@]}"
+            exit 1
+          fi
+          
           echo "hero_id=$HERO_ID" >> $GITHUB_OUTPUT
           echo "Total heroes: $TOTAL_HEROES"
-          echo "Syncing stats for hero ID: $HERO_ID (index $INDEX)"
+          echo "Calculated index: $INDEX"
+          echo "Syncing stats for hero ID: $HERO_ID (at position $INDEX)"
 
       - name: Refresh hero stats
         run: |

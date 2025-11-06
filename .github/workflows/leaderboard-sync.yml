@@ -12,7 +12,7 @@ jobs:
       - name: Sync global leaderboards
         run: |
           echo "Syncing global leaderboards at $(date -u)"
-          curl -X POST -L https://rivalsdb.gg/api/leaderboard/refresh \
+          curl -X POST -L https://rivalsdb.gg/api/admin/sync-leaderboard \
             --fail --silent --show-error
           echo "Successfully synced global leaderboards"
 
