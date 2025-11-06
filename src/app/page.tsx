@@ -163,6 +163,7 @@ export default function Home() {
   const [selectedPlayerCategory, setSelectedPlayerCategory] = useState<'score' | 'winrate' | 'win_count' | 'max_level' | 'battle_count' | 'max_rank_score'>('score')
   const [recentUpdates, setRecentUpdates] = useState<any>(null)
   const [battlePassItems, setBattlePassItems] = useState<any[]>([])
+  const [battlePassSeasonName, setBattlePassSeasonName] = useState<string>('')
   const [currentUpdateIndex, setCurrentUpdateIndex] = useState(0)
   const [currentBattlePassIndex, setCurrentBattlePassIndex] = useState(0)
   
@@ -348,6 +349,7 @@ export default function Home() {
         if (response.ok) {
           const data = await response.json()
           setBattlePassItems(data.items || [])
+          setBattlePassSeasonName(data.season_name || `Season ${data.season}`)
         }
       } catch (error) {
         console.error('Failed to fetch battle pass:', error)
@@ -987,6 +989,11 @@ export default function Home() {
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-12">
               <h2 className="text-2xl sm:text-3xl font-light mb-4 text-white">Current Battle Pass</h2>
+              {battlePassSeasonName && (
+                <p className="text-white/80 mb-2 text-sm uppercase tracking-[0.3em]">
+                  {battlePassSeasonName}
+                </p>
+              )}
               <p className="text-gray-500 text-sm max-w-2xl mx-auto">
                 Explore the rewards available in the current season
               </p>
@@ -996,39 +1003,43 @@ export default function Home() {
               <div className="relative">
                 <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02]">
                   <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${currentBattlePassIndex * 100}%)` }}>
-                    {battlePassItems.map((item, index) => (
-                      <div
-                        key={index}
-                        className="min-w-full px-8 py-12 flex flex-col items-center justify-center"
-                      >
-                        <div className="w-full max-w-md">
-                          <div className="aspect-square rounded-2xl bg-gradient-to-br from-white/5 to-black/80 border border-white/10 p-8 flex items-center justify-center mb-6">
-                            {item.image_url ? (
-                              <img
-                                src={item.image_url.startsWith('http') ? item.image_url : `https://marvelrivalsapi.com${item.image_url}`}
-                                alt={item.name || 'Battle Pass Item'}
-                                className="max-w-full max-h-full object-contain"
-                              />
-                            ) : (
-                              <div className="text-6xl">🎁</div>
-                            )}
-                          </div>
-                          <div className="text-center">
-                            <h3 className="text-2xl font-bold text-white mb-2">{item.name || 'Unknown Item'}</h3>
-                            {item.cost && (
-                              <div className="inline-block px-4 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm font-medium">
-                                Cost: {item.cost}
-                              </div>
-                            )}
-                            {item.isLuxury && (
-                              <div className="inline-block ml-2 px-4 py-1 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-300 text-sm font-medium">
-                                Luxury
-                              </div>
-                            )}
+                    {battlePassItems.map((item, index) => {
+                      const imageCandidates = getAssetCandidates(item.image)
+                      
+                      return (
+                        <div
+                          key={index}
+                          className="min-w-full px-8 py-12 flex flex-col items-center justify-center"
+                        >
+                          <div className="w-full max-w-md">
+                            <div className="aspect-square rounded-2xl bg-gradient-to-br from-white/5 to-black/80 border border-white/10 p-8 flex items-center justify-center mb-6">
+                              {imageCandidates.length > 0 ? (
+                                <SmartImage
+                                  paths={imageCandidates}
+                                  alt={item.name || 'Battle Pass Item'}
+                                  className="max-w-full max-h-full object-contain"
+                                />
+                              ) : (
+                                <div className="text-6xl">🎁</div>
+                              )}
+                            </div>
+                            <div className="text-center">
+                              <h3 className="text-2xl font-bold text-white mb-2">{item.name || 'Unknown Item'}</h3>
+                              {item.cost && (
+                                <div className="inline-block px-4 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm font-medium">
+                                  Cost: {item.cost}
+                                </div>
+                              )}
+                              {item.isLuxury && (
+                                <div className="inline-block ml-2 px-4 py-1 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-300 text-sm font-medium">
+                                  Luxury
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
                 <div className="flex justify-center gap-2 mt-6">
