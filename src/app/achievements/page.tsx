@@ -77,6 +77,72 @@ const SmartImage: React.FC<{ paths: string[]; alt: string; className?: string }>
   )
 }
 
+function SteamAchievementIcon({ achievement }: { achievement: any }) {
+  const [attempt, setAttempt] = useState(0)
+  const [showFallback, setShowFallback] = useState(false)
+
+  const getIconUrls = (): string[] => {
+    const icon = achievement.icon || achievement.iconPath || achievement.icon_url
+    if (!icon) {
+      return []
+    }
+    
+    const appId = '2767030'
+    const urls: string[] = []
+
+    if (typeof icon === 'string') {
+      if (icon.startsWith('http')) {
+        urls.push(icon)
+      } else if (icon.startsWith('/')) {
+        urls.push(`https://cdn.steamstatic.com${icon}`)
+        urls.push(`https://steamcommunity.com${icon}`)
+      } else {
+        const cleanIcon = icon.replace(/^\/+/, '')
+        urls.push(`https://cdn.steamstatic.com/steamcommunity/public/images/apps/${appId}/${cleanIcon}`)
+        urls.push(`https://cdn.steamstatic.com/steamcommunity/public/images/apps/${appId}/${cleanIcon}.jpg`)
+        urls.push(`https://cdn.steamstatic.com/steamcommunity/public/images/apps/${appId}/${cleanIcon}.png`)
+      }
+    }
+
+    if (achievement.iconGray || achievement.icon_gray) {
+      const grayIcon = achievement.iconGray || achievement.icon_gray
+      if (typeof grayIcon === 'string' && !grayIcon.startsWith('http')) {
+        const cleanGray = grayIcon.replace(/^\/+/, '')
+        urls.push(`https://cdn.steamstatic.com/steamcommunity/public/images/apps/${appId}/${cleanGray}`)
+        urls.push(`https://cdn.steamstatic.com/steamcommunity/public/images/apps/${appId}/${cleanGray}.jpg`)
+      }
+    }
+
+    return urls
+  }
+
+  const iconUrls = getIconUrls()
+  const currentUrl = iconUrls[attempt]
+
+  if (showFallback || iconUrls.length === 0) {
+    return <div className="text-2xl">🏆</div>
+  }
+
+  return (
+    <img
+      src={currentUrl}
+      alt={achievement.displayName || achievement.name || 'Achievement'}
+      className="w-full h-full object-cover"
+      onError={() => {
+        if (attempt < iconUrls.length - 1) {
+          setAttempt(prev => prev + 1)
+        } else {
+          setShowFallback(true)
+        }
+      }}
+      onLoad={(e) => {
+        e.currentTarget.style.opacity = '1'
+      }}
+      style={{ opacity: 0, transition: 'opacity 0.3s' }}
+    />
+  )
+}
+
 function SteamAchievementsSection() {
   const [steamData, setSteamData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -158,19 +224,8 @@ function SteamAchievementsSection() {
                 key={ach.name}
                 className="border border-white/10 bg-gradient-to-br from-white/[0.03] to-white/[0.01] rounded-lg p-4 flex items-center gap-4"
               >
-                <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center">
-                  {ach.icon ? (
-                    <img
-                      src={`https://cdn.steamstatic.com/steamcommunity/public/images/apps/2767030/${ach.icon}`}
-                      alt={ach.displayName || ach.name}
-                      className="w-full h-full object-cover rounded-lg"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none'
-                      }}
-                    />
-                  ) : (
-                    <div className="text-2xl">🏆</div>
-                  )}
+                <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center overflow-hidden">
+                  <SteamAchievementIcon achievement={ach} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-white font-medium truncate">
@@ -201,19 +256,8 @@ function SteamAchievementsSection() {
                 key={ach.name}
                 className="border border-white/10 bg-gradient-to-br from-white/[0.03] to-white/[0.01] rounded-lg p-4 flex items-center gap-4"
               >
-                <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center">
-                  {ach.icon ? (
-                    <img
-                      src={`https://cdn.steamstatic.com/steamcommunity/public/images/apps/2767030/${ach.icon}`}
-                      alt={ach.displayName || ach.name}
-                      className="w-full h-full object-cover rounded-lg"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none'
-                      }}
-                    />
-                  ) : (
-                    <div className="text-2xl">✅</div>
-                  )}
+                <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center overflow-hidden">
+                  <SteamAchievementIcon achievement={ach} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-white font-medium truncate">

@@ -73,15 +73,24 @@ export async function GET() {
     
     if (schemaData?.game?.availableGameStats?.achievements) {
       const details = schemaData.game.availableGameStats.achievements
+      console.log('Processing achievement schema:', {
+        total: details.length,
+        sample: details[0],
+        sampleKeys: details[0] ? Object.keys(details[0]) : null
+      })
       details.forEach((ach: any) => {
         if (ach.name) {
           achievementDetails[ach.name] = {
             displayName: ach.displayName,
             description: ach.description,
-            icon: ach.icon,
-            iconGray: ach.icongray
+            icon: ach.icon || ach.iconPath || ach.icon_url,
+            iconGray: ach.icongray || ach.iconGray || ach.icon_gray
           }
         }
+      })
+      console.log('Achievement details extracted:', {
+        count: Object.keys(achievementDetails).length,
+        sample: Object.values(achievementDetails)[0]
       })
     }
 
