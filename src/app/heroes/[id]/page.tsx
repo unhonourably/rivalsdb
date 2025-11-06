@@ -268,6 +268,10 @@ export default function HeroDetailPage() {
   const calculateRivalsDbScore = (stats: HeroStats | null): number => {
     if (!stats) return 0
     
+    const matches = Number(stats.matches) || 0
+    
+    const confidenceMultiplier = Math.min(matches / 500, 1)
+    
     let totalScore = 0
     
     const winRate = Number(stats.win_rate) || 0
@@ -284,8 +288,7 @@ export default function HeroDetailPage() {
     
     const kills = Number(stats.kills) || 0
     const assists = Number(stats.assists) || 0
-    const matches = Number(stats.matches) || 1
-    const eliminationsPerMatch = (kills + assists) / matches
+    const eliminationsPerMatch = matches > 0 ? (kills + assists) / matches : 0
     const elimsScore = Math.min(eliminationsPerMatch / 10, 1) * 20
     totalScore += elimsScore
     
@@ -293,7 +296,7 @@ export default function HeroDetailPage() {
     const avgScoreNormalized = Math.min(avgScore / 4000, 1) * 5
     totalScore += avgScoreNormalized
     
-    return Math.min(totalScore, 100)
+    return Math.min(totalScore * confidenceMultiplier, 100)
   }
 
   const rivalsDbScore = calculateRivalsDbScore(stats)
@@ -422,7 +425,7 @@ export default function HeroDetailPage() {
                           ? 'bg-gradient-to-r from-yellow-400 to-amber-400'
                           : 'bg-gradient-to-r from-red-400 to-orange-400'
                       }`}>
-                        {rivalsDbScore.toFixed(0)}<span className="text-xl text-gray-500">/100</span>
+                        {rivalsDbScore.toFixed(0)}
                       </div>
                     </div>
                     <div className="text-sm text-gray-400 text-right">

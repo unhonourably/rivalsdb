@@ -257,7 +257,9 @@ function HeroesManagerPanel() {
       const result = await response.json()
       setSuccess(prev => ({ ...prev, [heroId]: `✅ Synced ${result.count || 0} entries` }))
       
-      await fetchHeroes()
+      setHeroes(prev => prev.map(h => 
+        h.id === heroId ? { ...h, leaderboard_count: result.count || 0 } : h
+      ))
       
       setTimeout(() => {
         setSuccess(prev => ({ ...prev, [heroId]: null }))
@@ -324,6 +326,117 @@ function HeroesManagerPanel() {
               className="w-full px-3 py-2 rounded-lg bg-white text-black text-sm font-semibold hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {syncing[hero.id] ? 'Syncing...' : 'Sync Leaderboard'}
+            </button>
+            
+            {success[hero.id] && (
+              <div className="mt-2 text-xs text-center text-gray-300">
+                {success[hero.id]}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function HeroStatsManagerPanel() {
+  const [heroes, setHeroes] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState<Record<string, boolean>>({})
+  const [success, setSuccess] = useState<Record<string, string | null>>({})
+
+  const fetchHeroes = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/heroes')
+      if (!response.ok) throw new Error('Failed to fetch heroes')
+      const data = await response.json()
+      setHeroes(data.heroes || [])
+    } catch (error) {
+      console.error('Error fetching heroes:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchHeroes()
+  }, [])
+
+  const handleSyncStats = async (heroId: string, heroName: string) => {
+    setSyncing(prev => ({ ...prev, [heroId]: true }))
+    setSuccess(prev => ({ ...prev, [heroId]: null }))
+    
+    try {
+      const response = await fetch('/api/admin/hero-stats-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ heroId })
+      })
+      
+      if (!response.ok) throw new Error('Failed to sync stats')
+      
+      setSuccess(prev => ({ ...prev, [heroId]: `✅ Stats synced successfully` }))
+      
+      setTimeout(() => {
+        setSuccess(prev => ({ ...prev, [heroId]: null }))
+      }, 5000)
+    } catch (error) {
+      setSuccess(prev => ({ ...prev, [heroId]: `❌ Failed to sync` }))
+    } finally {
+      setSyncing(prev => ({ ...prev, [heroId]: false }))
+    }
+  }
+
+  const toTitleCase = (str: string) => {
+    if (!str) return ''
+    return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-white">Loading heroes...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-medium text-white mb-2">Hero Stats Manager</h1>
+        <p className="text-gray-400">
+          Manually sync individual hero stats. Use this to update specific hero statistics without running a full batch sync.
+        </p>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {heroes.map((hero) => (
+          <div key={hero.id} className="border border-white/10 bg-white/[0.02] rounded-xl p-4">
+            <div className="flex items-center gap-3 mb-3">
+              {hero.image_url && (
+                <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-white/10 bg-black/40">
+                  <img
+                    src={hero.image_url.startsWith('http') ? hero.image_url : `https://marvelrivalsapi.com${hero.image_url}`}
+                    alt={hero.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <h3 className="text-white font-medium truncate">{toTitleCase(hero.name)}</h3>
+                <p className="text-xs text-gray-400">{hero.role || 'Unknown'}</p>
+              </div>
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => handleSyncStats(hero.id, hero.name)}
+              disabled={syncing[hero.id]}
+              className="w-full px-3 py-2 rounded-lg bg-white text-black text-sm font-semibold hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {syncing[hero.id] ? 'Syncing...' : 'Sync Stats'}
             </button>
             
             {success[hero.id] && (
@@ -434,11 +547,10 @@ function HeroesRankingsPanel() {
                         ? 'text-yellow-300'
                         : 'text-red-300'
                     }`}>{hero.rivals_db_score?.toFixed(0) || '0'}</span>
-                    <span className="text-gray-500 text-xs ml-1">/100</span>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-white">
-                  {hero.win_rate ? `${hero.win_rate.toFixed(1)}%` : '-'}
+                  {hero.win_rate ? `${(hero.win_rate > 1 ? hero.win_rate : hero.win_rate * 100).toFixed(1)}%` : '-'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-white">
                   {hero.kda ? hero.kda.toFixed(2) : '-'}
@@ -479,7 +591,7 @@ import {
 
 type SyncStatus = 'idle' | 'pending' | 'success' | 'error'
 
-type PanelKey = 'overview' | 'auto-sync' | 'achievements' | 'items' | 'battlepass' | 'patchnotes' | 'balances' | 'devdiaries' | 'gameversions' | 'leaderboard' | 'leaderboard-players' | 'heroes' | 'heroes-manager' | 'heroes-rankings'
+type PanelKey = 'overview' | 'auto-sync' | 'achievements' | 'items' | 'battlepass' | 'patchnotes' | 'balances' | 'devdiaries' | 'gameversions' | 'leaderboard' | 'leaderboard-players' | 'heroes' | 'heroes-manager' | 'heroes-stats-manager' | 'heroes-rankings'
 
 interface SyncState {
   status: SyncStatus
@@ -1780,6 +1892,8 @@ export default function AdminDashboardPage() {
         )
       case 'heroes-manager':
         return <HeroesManagerPanel />
+      case 'heroes-stats-manager':
+        return <HeroStatsManagerPanel />
       case 'heroes-rankings':
         return <HeroesRankingsPanel />
       default:
@@ -1833,6 +1947,7 @@ export default function AdminDashboardPage() {
     { key: 'leaderboard-players', label: 'LB Players', icon: '👥' },
     { key: 'heroes', label: 'Heroes', icon: '🦸' },
     { key: 'heroes-manager', label: 'Hero Manager', icon: '⚙️' },
+    { key: 'heroes-stats-manager', label: 'Hero Stats Manager', icon: '📈' },
     { key: 'heroes-rankings', label: 'Hero Rankings', icon: '🏆' },
   ]
 

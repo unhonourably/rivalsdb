@@ -25,10 +25,14 @@ export async function GET(request: NextRequest) {
       if (!item.stats) return false
       const matches = Number(item.stats.matches)
       if (isNaN(matches)) return false
-      return matches > 100
+      return matches > 200
     })
 
     const calculateHeroScore = (stats: any): number => {
+      const matches = Number(stats.matches) || 0
+      
+      const confidenceMultiplier = Math.min(matches / 500, 1)
+      
       let totalScore = 0
       
       const winRate = Number(stats.win_rate) || 0
@@ -45,8 +49,7 @@ export async function GET(request: NextRequest) {
       
       const kills = Number(stats.kills) || 0
       const assists = Number(stats.assists) || 0
-      const matches = Number(stats.matches) || 1
-      const eliminationsPerMatch = (kills + assists) / matches
+      const eliminationsPerMatch = matches > 0 ? (kills + assists) / matches : 0
       const elimsScore = Math.min(eliminationsPerMatch / 10, 1) * 20
       totalScore += elimsScore
       
@@ -54,7 +57,7 @@ export async function GET(request: NextRequest) {
       const avgScoreNormalized = Math.min(avgScore / 4000, 1) * 5
       totalScore += avgScoreNormalized
       
-      return Math.min(totalScore, 100)
+      return Math.min(totalScore * confidenceMultiplier, 100)
     }
 
     validHeroes.sort((a, b) => {

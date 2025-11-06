@@ -142,7 +142,8 @@ const SmartImage: React.FC<{ paths: string[]; alt: string; className?: string }>
 
 const formatWinRate = (value?: number): string => {
   if (value === undefined || Number.isNaN(value)) return '-'
-  return `${value.toFixed(1)}%`
+  const percentage = value > 1 ? value : value * 100
+  return `${percentage.toFixed(1)}%`
 }
 
 const formatNumber = (value?: number): string => {
@@ -762,7 +763,7 @@ export default function Home() {
                                   : 'bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-500/30 text-red-300'
                                 : 'bg-gray-500/20 border border-gray-500/30 text-gray-300'
                             }`}>
-                              RivalsDB Score: {typeof item.stats.rivals_db_score === 'number' ? item.stats.rivals_db_score.toFixed(0) : '-'}/100
+                              RivalsDB Score: {typeof item.stats.rivals_db_score === 'number' ? item.stats.rivals_db_score.toFixed(0) : '-'}
                             </div>
                           </div>
                         </div>
