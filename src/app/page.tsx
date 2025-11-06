@@ -161,6 +161,10 @@ export default function Home() {
   const [showcaseError, setShowcaseError] = useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<'wins' | 'winrate' | 'damage' | 'damage_taken' | 'healing' | 'playtime'>('wins')
   const [selectedPlayerCategory, setSelectedPlayerCategory] = useState<'score' | 'winrate' | 'win_count' | 'max_level' | 'battle_count' | 'max_rank_score'>('score')
+  const [recentUpdates, setRecentUpdates] = useState<any>(null)
+  const [battlePassItems, setBattlePassItems] = useState<any[]>([])
+  const [currentUpdateIndex, setCurrentUpdateIndex] = useState(0)
+  const [currentBattlePassIndex, setCurrentBattlePassIndex] = useState(0)
   
   const categoryLabels: Record<string, string> = {
     wins: 'Overall Wins',
@@ -321,6 +325,58 @@ export default function Home() {
 
     fetchBestHeroes()
   }, [])
+
+  useEffect(() => {
+    const fetchRecentUpdates = async () => {
+      try {
+        const response = await fetch('/api/recent-updates')
+        if (response.ok) {
+          const data = await response.json()
+          setRecentUpdates(data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch recent updates:', error)
+      }
+    }
+    fetchRecentUpdates()
+  }, [])
+
+  useEffect(() => {
+    const fetchBattlePass = async () => {
+      try {
+        const response = await fetch('/api/battlepass/current')
+        if (response.ok) {
+          const data = await response.json()
+          setBattlePassItems(data.items || [])
+        }
+      } catch (error) {
+        console.error('Failed to fetch battle pass:', error)
+      }
+    }
+    fetchBattlePass()
+  }, [])
+
+  useEffect(() => {
+    if (!recentUpdates) return
+    const updates = [recentUpdates.patchNote, recentUpdates.devDiary, recentUpdates.balance].filter(Boolean)
+    if (updates.length === 0) return
+    
+    const interval = setInterval(() => {
+      setCurrentUpdateIndex((prev) => (prev + 1) % updates.length)
+    }, 5000)
+    
+    return () => clearInterval(interval)
+  }, [recentUpdates])
+
+  useEffect(() => {
+    if (battlePassItems.length === 0) return
+    
+    const interval = setInterval(() => {
+      setCurrentBattlePassIndex((prev) => (prev + 1) % battlePassItems.length)
+    }, 3000)
+    
+    return () => clearInterval(interval)
+  }, [battlePassItems])
   
   const formatDisplayValue = (value: string | number, category: string): string => {
     if (value === '-' || value === null || value === undefined) return '-'
@@ -863,6 +919,133 @@ export default function Home() {
                     No hero data available right now.
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="py-24 px-6 lg:px-8 border-t border-white/5">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-2xl sm:text-3xl font-light mb-4 text-white">Latest Updates</h2>
+              <p className="text-gray-500 text-sm max-w-2xl mx-auto">
+                Stay up to date with the latest patch notes, developer diaries, and balance changes
+              </p>
+            </div>
+
+            {recentUpdates ? (
+              <div className="relative h-96 rounded-3xl border border-white/10 overflow-hidden">
+                {[recentUpdates.patchNote, recentUpdates.devDiary, recentUpdates.balance].filter(Boolean).map((update, index) => {
+                  const updateType = update === recentUpdates.patchNote ? 'Patch Note' : update === recentUpdates.devDiary ? 'Dev Diary' : 'Balance Change'
+                  const updateColor = update === recentUpdates.patchNote ? 'from-blue-500/20' : update === recentUpdates.devDiary ? 'from-purple-500/20' : 'from-amber-500/20'
+                  
+                  return (
+                    <div
+                      key={index}
+                      className={`absolute inset-0 transition-opacity duration-1000 ${
+                        currentUpdateIndex === index ? 'opacity-100' : 'opacity-0'
+                      }`}
+                    >
+                      <div className={`h-full bg-gradient-to-br ${updateColor} to-black/80 p-8 flex flex-col justify-between`}>
+                        <div>
+                          <div className="inline-block px-4 py-1 rounded-full bg-white/10 border border-white/20 text-white text-sm font-medium mb-4">
+                            {updateType}
+                          </div>
+                          <h3 className="text-3xl font-bold text-white mb-4">{update.title}</h3>
+                          {update.date_label && (
+                            <p className="text-gray-300 text-sm mb-4">{update.date_label}</p>
+                          )}
+                          {update.preview && (
+                            <p className="text-gray-300 line-clamp-3">{update.preview}</p>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          {[recentUpdates.patchNote, recentUpdates.devDiary, recentUpdates.balance].filter(Boolean).map((_, dotIndex) => (
+                            <button
+                              key={dotIndex}
+                              onClick={() => setCurrentUpdateIndex(dotIndex)}
+                              className={`h-2 rounded-full transition-all ${
+                                currentUpdateIndex === dotIndex ? 'w-8 bg-white' : 'w-2 bg-white/40'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="text-center text-gray-400 py-20">
+                Loading updates...
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="py-24 px-6 lg:px-8 border-t border-white/5">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-2xl sm:text-3xl font-light mb-4 text-white">Current Battle Pass</h2>
+              <p className="text-gray-500 text-sm max-w-2xl mx-auto">
+                Explore the rewards available in the current season
+              </p>
+            </div>
+
+            {battlePassItems.length > 0 ? (
+              <div className="relative">
+                <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02]">
+                  <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${currentBattlePassIndex * 100}%)` }}>
+                    {battlePassItems.map((item, index) => (
+                      <div
+                        key={index}
+                        className="min-w-full px-8 py-12 flex flex-col items-center justify-center"
+                      >
+                        <div className="w-full max-w-md">
+                          <div className="aspect-square rounded-2xl bg-gradient-to-br from-white/5 to-black/80 border border-white/10 p-8 flex items-center justify-center mb-6">
+                            {item.image_url ? (
+                              <img
+                                src={item.image_url.startsWith('http') ? item.image_url : `https://marvelrivalsapi.com${item.image_url}`}
+                                alt={item.name || 'Battle Pass Item'}
+                                className="max-w-full max-h-full object-contain"
+                              />
+                            ) : (
+                              <div className="text-6xl">🎁</div>
+                            )}
+                          </div>
+                          <div className="text-center">
+                            <h3 className="text-2xl font-bold text-white mb-2">{item.name || 'Unknown Item'}</h3>
+                            {item.cost && (
+                              <div className="inline-block px-4 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm font-medium">
+                                Cost: {item.cost}
+                              </div>
+                            )}
+                            {item.isLuxury && (
+                              <div className="inline-block ml-2 px-4 py-1 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-300 text-sm font-medium">
+                                Luxury
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-center gap-2 mt-6">
+                  {battlePassItems.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentBattlePassIndex(index)}
+                      className={`h-2 rounded-full transition-all ${
+                        currentBattlePassIndex === index ? 'w-8 bg-white' : 'w-2 bg-white/40'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-gray-400 py-20">
+                Loading battle pass...
               </div>
             )}
           </div>
