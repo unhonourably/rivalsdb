@@ -63,11 +63,33 @@ jobs:
       - name: Get hero IDs from API
         id: hero-ids
         run: |
-          HEROES=$(curl -s https://rivalsdb.gg/api/heroes | jq -r '.heroes | map(.id) | join(" ")')
+          RESPONSE=$(curl -s -f -w "\n%{http_code}" https://rivalsdb.gg/api/heroes)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Error: API returned HTTP $HTTP_CODE"
+            echo "Response: $BODY"
+            exit 1
+          fi
+          
+          HEROES=$(echo "$BODY" | jq -r '.heroes | map(.id) | join(" ")')
+          
+          if [ -z "$HEROES" ] || [ "$HEROES" = "null" ]; then
+            echo "Error: Failed to parse heroes from API response"
+            echo "Response body: $BODY"
+            exit 1
+          fi
+          
           HERO_ARRAY=($HEROES)
           
           INDEX=${{ steps.hero-index.outputs.hero_index }}
           TOTAL_HEROES=${#HERO_ARRAY[@]}
+          
+          if [ $TOTAL_HEROES -eq 0 ]; then
+            echo "Error: No heroes found in response"
+            exit 1
+          fi
           
           if [ $INDEX -ge $TOTAL_HEROES ]; then
             INDEX=$((INDEX % TOTAL_HEROES))
